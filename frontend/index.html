@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>VoiceRA - Preserve Your Loved One's Voice</title>
+		<link rel="stylesheet" href="styles.css" />
+	</head>
+	<body>
+		<div class="container">
+			<header>
+				<h1>VoiceRA</h1>
+				<p class="subtitle">Upload samples, enter text, generate a voice message, then download it.</p>
+			</header>
+
+			<!-- Upload Section -->
+			<div class="card" id="upload-section">
+				<div class="title">1) Upload Voice Samples</div>
+
+				<div class="upload-area" id="upload-area">
+					<input type="file" id="file-input" accept=".mp3,.wav,.m4a,audio/*" multiple hidden />
+					<div class="upload-content">
+						<svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+							<polyline points="17 8 12 3 7 8"></polyline>
+							<line x1="12" y1="3" x2="12" y2="15"></line>
+						</svg>
+						<p class="upload-text">Click to upload or drag & drop</p>
+						<p class="upload-hint">1–3 samples recommended • MP3/WAV/M4A • Max 10MB each</p>
+					</div>
+				</div>
+
+				<!-- Sample Cards Container -->
+				<div id="sample-list"></div>
+			</div>
+
+			<!-- Text Input Section -->
+			<div class="card" id="text-section">
+				<div class="title">2) Enter Text</div>
+				<textarea id="text-input" class="textarea" placeholder="Type your message (max 2500 characters)..." maxlength="2500">
+Howdy mere mortal, I am the voice of your beloved.
+    </textarea
+				>
+				<div class="counter" id="char-counter">0 / 2500</div>
+			</div>
+
+			<!-- Generate Button -->
+			<div class="card" id="generate-section">
+				<button class="btn btn-primary" id="generate-btn" disabled>Generate Voice</button>
+			</div>
+
+			<!-- Generating State -->
+			<div class="card generating-state hidden" id="generating-state">
+				<div class="spinner"></div>
+				<div class="generating-text">Generating...</div>
+			</div>
+
+			<!-- Success State -->
+			<div class="card success-state hidden" id="success-state">
+				<div class="success-title">Voice generated successfully!</div>
+				<div class="audio-player-container">
+					<audio id="generated-audio" controls></audio>
+				</div>
+				<button class="btn btn-download" id="download-btn">Download Audio</button>
+				<button class="btn btn-reset" id="start-over-btn">Start Over</button>
+			</div>
+
+			<!-- Error Modal -->
+			<div class="modal-overlay hidden" id="error-modal">
+				<div class="modal">
+					<div class="modal-header">Error</div>
+					<div class="modal-text" id="error-message">Something went wrong.</div>
+					<div class="modal-hint" id="error-hint">Try Again retries immediately using the same samples + text. Close returns to the form so you can edit.</div>
+					<div class="modal-actions">
+						<button class="btn btn-close" id="close-modal">Close</button>
+						<button class="btn btn-retry" id="retry-btn">Try Again</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<script src="app.js"></script>
+	</body>
+</html>
