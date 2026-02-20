@@ -296,14 +296,68 @@ async function getVoices() {
 }
 
 /**
- * Delete a voice clone (NOT IMPLEMENTED IN MVP)
- * This is a placeholder for future use
+ * Delete a voice clone from ElevenLabs
  * @param {string} voiceId - The voice ID to delete
+ * @throws {Error} If voiceId is missing, service not configured, or API returns error
  */
 async function deleteVoiceClone(voiceId) {
-	console.log(`⚠️  Voice clone deletion not implemented in MVP (voice: ${voiceId})`);
-	// MVP note: Voice clones are not deleted to keep the implementation simple
-	// This can be added later if needed
+	if (!isConfigured()) {
+		throw new Error('ElevenLabs API key not configured');
+	}
+
+	if (!voiceId) {
+		throw new Error('Voice ID is required for deletion');
+	}
+
+	try {
+		console.log(`🗑️  Deleting voice clone: ${voiceId}`);
+
+		const response = await elevenlabsClient.delete(`/voices/${voiceId}`, {
+			headers: {
+				'xi-api-key': ELEVENLABS_API_KEY,
+			},
+		});
+
+		console.log(`✅ Voice clone deleted successfully: ${voiceId}`);
+		return response.data;
+	} catch (error) {
+		console.error('❌ Voice clone deletion failed:', error.message);
+
+		// Enhance error message with API response details
+		if (error.response) {
+			const status = error.response.status;
+			const data = error.response.data;
+
+			// Log the full error response for debugging
+			console.error('   Response status:', status);
+			if (data) {
+				console.error('   Response data:', JSON.stringify(data, null, 2));
+			}
+
+			if (status === 401) {
+				throw new Error('Invalid ElevenLabs API key');
+			} else if (status === 404) {
+				throw new Error('Voice not found. It may have already been deleted.');
+			} else if (status === 429) {
+				throw new Error('ElevenLabs rate limit exceeded. Please try again later.');
+			} else if (data) {
+				// Extract error message from various possible formats
+				let errorMessage = '';
+				if (typeof data.detail === 'string') {
+					errorMessage = data.detail;
+				} else if (typeof data.detail === 'object' && data.detail !== null) {
+					errorMessage = JSON.stringify(data.detail);
+				} else if (data.message) {
+					errorMessage = data.message;
+				} else {
+					errorMessage = JSON.stringify(data);
+				}
+				throw new Error(`ElevenLabs API error: ${errorMessage}`);
+			}
+		}
+
+		throw new Error(`Failed to delete voice clone: ${error.message}`);
+	}
 }
 
 module.exports = {
