@@ -7,7 +7,7 @@ const fs = require('fs').promises;
 const path = require('path');
 
 // Storage configuration
-const STORAGE_DIR = process.env.STORAGE_DIR || path.join(__dirname, '../../uploads');
+const STORAGE_DIR = process.env.STORAGE_DIR || path.join(__dirname, '../../data/audio');
 
 // Ensure storage directory exists
 async function ensureStorageDir() {

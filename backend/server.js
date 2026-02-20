@@ -7,7 +7,6 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
-const cleanupJob = require('./jobs/cleanup');
 
 // Initialize Express app
 const app = express();
@@ -32,9 +31,9 @@ app.get('/api/health', (req, res) => {
 });
 
 // API routes
-app.use('/api/upload', require('./routes/upload'));
-app.use('/api/generate', require('./routes/generate'));
-app.use('/api/download', require('./routes/download'));
+// TODO: app.use('/api/voices', require('./routes/voices'));
+// TODO: app.use('/api/conversations', require('./routes/conversations'));
+// TODO: app.use('/api/audio', require('./routes/audio'));
 // app.use('/api/cleanup', require('./routes/cleanup')); // Optional - will add in Batch 3
 
 // Serve frontend for all other routes (SPA support)
@@ -53,11 +52,8 @@ app.use((err, req, res, next) => {
 
 // Start server
 app.listen(PORT, () => {
-	console.log(`🎙️  VoiceRA MVP Server running on http://localhost:${PORT}`);
+	console.log(`🎙️  VoiceRA Conversational AI Server running on http://localhost:${PORT}`);
 	console.log(`📁 Environment: ${process.env.NODE_ENV || 'development'}`);
-
-	// Initialize scheduled cleanup job (optional)
-	cleanupJob.initializeCleanupJob();
 });
 
 module.exports = app;

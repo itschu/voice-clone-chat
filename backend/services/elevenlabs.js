@@ -217,6 +217,71 @@ async function generateSpeech(voiceId, text, options = {}) {
 }
 
 /**
+ * Transcribe speech to text using ElevenLabs Speech-to-Text
+ * @param {Buffer} audioBuffer - Audio buffer to transcribe
+ * @param {string} mimeType - MIME type of audio (e.g., 'audio/webm', 'audio/mp3')
+ * @returns {Promise<string>} - Transcribed text
+ */
+async function transcribeSpeech(audioBuffer, mimeType) {
+  if (!isConfigured()) {
+    throw new Error('ElevenLabs API key not configured');
+  }
+
+  if (!audioBuffer || audioBuffer.length === 0) {
+    throw new Error('Audio buffer is required for transcription');
+  }
+
+  try {
+    const formData = new FormData();
+    formData.append('file', audioBuffer, {
+      filename: 'audio.webm',
+      contentType: mimeType,
+    });
+
+    console.log('🎙️ Transcribing speech...');
+
+    const response = await elevenlabsClient.post('/speech-to-text', formData, {
+      headers: {
+        ...formData.getHeaders(),
+        'xi-api-key': ELEVENLABS_API_KEY,
+      },
+    });
+
+    const text = response.data.text;
+    console.log(`✅ Transcription complete`);
+    
+    return text;
+  } catch (error) {
+    console.error('❌ Transcription failed:', error.message);
+    
+    if (error.response) {
+      const status = error.response.status;
+      const data = error.response.data;
+      
+      if (status === 401) {
+        throw new Error('Invalid ElevenLabs API key');
+      } else if (status === 429) {
+        throw new Error('ElevenLabs rate limit exceeded. Please try again later.');
+      } else if (data) {
+        let errorMessage = '';
+        if (typeof data.detail === 'string') {
+          errorMessage = data.detail;
+        } else if (typeof data.detail === 'object' && data.detail !== null) {
+          errorMessage = JSON.stringify(data.detail);
+        } else if (data.message) {
+          errorMessage = data.message;
+        } else {
+          errorMessage = JSON.stringify(data);
+        }
+        throw new Error(`ElevenLabs API error: ${errorMessage}`);
+      }
+    }
+    
+    throw error;
+  }
+}
+
+/**
  * Get available voices from ElevenLabs account
  * @returns {Promise<Array>} - List of voices
  */
@@ -249,6 +314,7 @@ module.exports = {
   isConfigured,
   createVoiceClone,
   generateSpeech,
+  transcribeSpeech,
   getVoices,
   deleteVoiceClone,
 };
