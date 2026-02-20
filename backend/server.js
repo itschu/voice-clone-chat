@@ -32,8 +32,8 @@ app.get('/api/health', (req, res) => {
 
 // API routes
 app.use('/api/voices', require('./routes/voices'));
-// TODO: app.use('/api/conversations', require('./routes/conversations'));
-// TODO: app.use('/api/audio', require('./routes/audio'));
+app.use('/api/conversations', require('./routes/conversations'));
+app.use('/api/audio', require('./routes/audio'));
 // app.use('/api/cleanup', require('./routes/cleanup')); // Optional - will add in Batch 3
 
 // Serve frontend for all other routes (SPA support)

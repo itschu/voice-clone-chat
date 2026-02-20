@@ -38,7 +38,7 @@ function isConfigured() {
 /**
  * Create a voice clone using Instant Voice Cloning (IVC)
  * @param {string} name - Name for the voice clone
- * @param {Array<{buffer: Buffer, filename: string}>} audioFiles - Array of audio file buffers
+ * @param {Array<{buffer: Buffer, originalname?: string, filename?: string, mimetype?: string}>} audioFiles - Array of audio file buffers
  * @returns {Promise<string>} - Voice ID
  */
 async function createVoiceClone(name, audioFiles) {
@@ -59,9 +59,38 @@ async function createVoiceClone(name, audioFiles) {
 
 		// Add audio files
 		audioFiles.forEach((file, index) => {
+			// Determine filename with priority: originalname > filename > generated name with extension
+			let filename;
+			if (file.originalname) {
+				filename = file.originalname;
+			} else if (file.filename) {
+				filename = file.filename;
+			} else {
+				// Generate filename with appropriate extension based on mimetype
+				let extension = '.mp3'; // default
+				if (file.mimetype) {
+					switch (file.mimetype) {
+						case 'audio/wav':
+						case 'audio/x-wav':
+							extension = '.wav';
+							break;
+						case 'audio/m4a':
+						case 'audio/mp4':
+							extension = '.m4a';
+							break;
+						default:
+							extension = '.mp3';
+					}
+				}
+				filename = `sample_${index + 1}${extension}`;
+			}
+
+			// Use file's mimetype if available, fallback to 'audio/mpeg'
+			const contentType = file.mimetype || 'audio/mpeg';
+
 			formData.append('files', file.buffer, {
-				filename: file.filename || `sample_${index + 1}.mp3`,
-				contentType: 'audio/mpeg',
+				filename: filename,
+				contentType: contentType,
 			});
 		});
 
