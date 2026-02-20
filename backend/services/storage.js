@@ -11,17 +11,17 @@ const STORAGE_DIR = process.env.STORAGE_DIR || path.join(__dirname, '../../data/
 
 // Ensure storage directory exists
 async function ensureStorageDir() {
-  try {
-    await fs.mkdir(STORAGE_DIR, { recursive: true });
-  } catch (error) {
-    console.error('❌ Failed to create storage directory:', error.message);
-    throw error;
-  }
+	try {
+		await fs.mkdir(STORAGE_DIR, { recursive: true });
+	} catch (error) {
+		console.error('❌ Failed to create storage directory:', error.message);
+		throw error;
+	}
 }
 
 // Initialize on module load
 ensureStorageDir().then(() => {
-  console.log('✅ Local storage initialized at:', STORAGE_DIR);
+	console.log('✅ Local storage initialized at:', STORAGE_DIR);
 });
 
 /**
@@ -29,26 +29,26 @@ ensureStorageDir().then(() => {
  * @returns {boolean}
  */
 function isConfigured() {
-  return true; // Local storage is always available
+	return true; // Local storage is always available
 }
 
 /**
  * Get session directory path
- * @param {string} sessionId 
+ * @param {string} sessionId
  * @returns {string}
  */
 function getSessionDir(sessionId) {
-  return path.join(STORAGE_DIR, sessionId);
+	return path.join(STORAGE_DIR, sessionId);
 }
 
 /**
  * Get file path within session
- * @param {string} sessionId 
- * @param {string} filePath 
+ * @param {string} sessionId
+ * @param {string} filePath
  * @returns {string}
  */
 function getFilePath(sessionId, filePath) {
-  return path.join(STORAGE_DIR, sessionId, filePath);
+	return path.join(STORAGE_DIR, sessionId, filePath);
 }
 
 /**
@@ -60,34 +60,34 @@ function getFilePath(sessionId, filePath) {
  * @returns {Promise<string>} - File path
  */
 async function uploadFile(sessionId, filePath, buffer, metadata = {}) {
-  const fullPath = getFilePath(sessionId, filePath);
-  const dir = path.dirname(fullPath);
+	const fullPath = getFilePath(sessionId, filePath);
+	const dir = path.dirname(fullPath);
 
-  try {
-    // Create session directory if needed
-    await fs.mkdir(dir, { recursive: true });
+	try {
+		// Create session directory if needed
+		await fs.mkdir(dir, { recursive: true });
 
-    // Write file
-    await fs.writeFile(fullPath, buffer);
+		// Write file
+		await fs.writeFile(fullPath, buffer);
 
-    // Write metadata sidecar file
-    const metadataPath = `${fullPath}.meta.json`;
-    const metaData = {
-      uploadedAt: new Date().toISOString(),
-      originalFilename: metadata.originalFilename || 'unknown',
-      fileSize: buffer.length,
-      mimeType: metadata.mimeType || 'application/octet-stream',
-      sessionId: sessionId,
-      ...metadata
-    };
-    await fs.writeFile(metadataPath, JSON.stringify(metaData, null, 2));
+		// Write metadata sidecar file
+		const metadataPath = `${fullPath}.meta.json`;
+		const metaData = {
+			uploadedAt: new Date().toISOString(),
+			originalFilename: metadata.originalFilename || 'unknown',
+			fileSize: buffer.length,
+			mimeType: metadata.mimeType || 'application/octet-stream',
+			sessionId: sessionId,
+			...metadata,
+		};
+		await fs.writeFile(metadataPath, JSON.stringify(metaData, null, 2));
 
-    console.log(`✅ Saved to local storage: ${filePath} (${buffer.length} bytes)`);
-    return filePath;
-  } catch (error) {
-    console.error(`❌ Local storage save failed for ${filePath}:`, error.message);
-    throw error;
-  }
+		console.log(`✅ Saved to local storage: ${filePath} (${buffer.length} bytes)`);
+		return filePath;
+	} catch (error) {
+		console.error(`❌ Local storage save failed for ${filePath}:`, error.message);
+		throw error;
+	}
 }
 
 /**
@@ -97,23 +97,23 @@ async function uploadFile(sessionId, filePath, buffer, metadata = {}) {
  * @returns {Promise<fs.ReadStream>} - File stream
  */
 async function downloadFile(sessionId, filePath) {
-  const fullPath = getFilePath(sessionId, filePath);
+	const fullPath = getFilePath(sessionId, filePath);
 
-  try {
-    // Check if file exists
-    await fs.access(fullPath);
+	try {
+		// Check if file exists
+		await fs.access(fullPath);
 
-    console.log(`📥 Streaming from local storage: ${filePath}`);
-    const { createReadStream } = require('fs');
-    return createReadStream(fullPath);
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      const err = new Error(`File not found: ${filePath}`);
-      err.status = 404;
-      throw err;
-    }
-    throw error;
-  }
+		console.log(`📥 Streaming from local storage: ${filePath}`);
+		const { createReadStream } = require('fs');
+		return createReadStream(fullPath);
+	} catch (error) {
+		if (error.code === 'ENOENT') {
+			const err = new Error(`File not found: ${filePath}`);
+			err.status = 404;
+			throw err;
+		}
+		throw error;
+	}
 }
 
 /**
@@ -123,20 +123,20 @@ async function downloadFile(sessionId, filePath) {
  * @returns {Promise<Buffer>} - File buffer
  */
 async function downloadFileAsBuffer(sessionId, filePath) {
-  const fullPath = getFilePath(sessionId, filePath);
+	const fullPath = getFilePath(sessionId, filePath);
 
-  try {
-    const buffer = await fs.readFile(fullPath);
-    console.log(`✅ Read from local storage: ${filePath} (${buffer.length} bytes)`);
-    return buffer;
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      const err = new Error(`File not found: ${filePath}`);
-      err.status = 404;
-      throw err;
-    }
-    throw error;
-  }
+	try {
+		const buffer = await fs.readFile(fullPath);
+		console.log(`✅ Read from local storage: ${filePath} (${buffer.length} bytes)`);
+		return buffer;
+	} catch (error) {
+		if (error.code === 'ENOENT') {
+			const err = new Error(`File not found: ${filePath}`);
+			err.status = 404;
+			throw err;
+		}
+		throw error;
+	}
 }
 
 /**
@@ -145,29 +145,29 @@ async function downloadFileAsBuffer(sessionId, filePath) {
  * @param {string} filePath - Path within session
  */
 async function deleteFile(sessionId, filePath) {
-  const fullPath = getFilePath(sessionId, filePath);
-  const metadataPath = `${fullPath}.meta.json`;
+	const fullPath = getFilePath(sessionId, filePath);
+	const metadataPath = `${fullPath}.meta.json`;
 
-  try {
-    // Delete file
-    try {
-      await fs.unlink(fullPath);
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
+	try {
+		// Delete file
+		try {
+			await fs.unlink(fullPath);
+		} catch (error) {
+			if (error.code !== 'ENOENT') throw error;
+		}
 
-    // Delete metadata file
-    try {
-      await fs.unlink(metadataPath);
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
+		// Delete metadata file
+		try {
+			await fs.unlink(metadataPath);
+		} catch (error) {
+			if (error.code !== 'ENOENT') throw error;
+		}
 
-    console.log(`🗑️  Deleted from local storage: ${filePath}`);
-  } catch (error) {
-    console.error(`❌ Delete failed for ${filePath}:`, error.message);
-    throw error;
-  }
+		console.log(`🗑️  Deleted from local storage: ${filePath}`);
+	} catch (error) {
+		console.error(`❌ Delete failed for ${filePath}:`, error.message);
+		throw error;
+	}
 }
 
 /**
@@ -175,46 +175,46 @@ async function deleteFile(sessionId, filePath) {
  * @param {string} sessionId - Session identifier
  */
 async function deleteSession(sessionId) {
-  const sessionDir = getSessionDir(sessionId);
+	const sessionDir = getSessionDir(sessionId);
 
-  try {
-    // Check if directory exists
-    try {
-      await fs.access(sessionDir);
-    } catch (error) {
-      if (error.code === 'ENOENT') {
-        console.log(`⚠️  Session directory not found: ${sessionId}`);
-        return;
-      }
-      throw error;
-    }
+	try {
+		// Check if directory exists
+		try {
+			await fs.access(sessionDir);
+		} catch (error) {
+			if (error.code === 'ENOENT') {
+				console.log(`⚠️  Session directory not found: ${sessionId}`);
+				return;
+			}
+			throw error;
+		}
 
-    // Read directory contents
-    const entries = await fs.readdir(sessionDir, { withFileTypes: true });
+		// Read directory contents
+		const entries = await fs.readdir(sessionDir, { withFileTypes: true });
 
-    // Delete all files and subdirectories
-    for (const entry of entries) {
-      const entryPath = path.join(sessionDir, entry.name);
-      if (entry.isDirectory()) {
-        // Recursively delete subdirectory
-        const subEntries = await fs.readdir(entryPath);
-        for (const subEntry of subEntries) {
-          await fs.unlink(path.join(entryPath, subEntry)).catch(() => {});
-        }
-        await fs.rmdir(entryPath);
-      } else {
-        await fs.unlink(entryPath);
-      }
-    }
+		// Delete all files and subdirectories
+		for (const entry of entries) {
+			const entryPath = path.join(sessionDir, entry.name);
+			if (entry.isDirectory()) {
+				// Recursively delete subdirectory
+				const subEntries = await fs.readdir(entryPath);
+				for (const subEntry of subEntries) {
+					await fs.unlink(path.join(entryPath, subEntry)).catch(() => {});
+				}
+				await fs.rmdir(entryPath);
+			} else {
+				await fs.unlink(entryPath);
+			}
+		}
 
-    // Remove session directory
-    await fs.rmdir(sessionDir);
+		// Remove session directory
+		await fs.rmdir(sessionDir);
 
-    console.log(`🗑️  Deleted session: ${sessionId}`);
-  } catch (error) {
-    console.error(`❌ Session delete failed for ${sessionId}:`, error.message);
-    throw error;
-  }
+		console.log(`🗑️  Deleted session: ${sessionId}`);
+	} catch (error) {
+		console.error(`❌ Session delete failed for ${sessionId}:`, error.message);
+		throw error;
+	}
 }
 
 /**
@@ -223,43 +223,43 @@ async function deleteSession(sessionId) {
  * @returns {Promise<Array>} - Array of file objects
  */
 async function listOldFiles(ageInHours = 24) {
-  const cutoffTime = Date.now() - ageInHours * 60 * 60 * 1000;
-  const oldFiles = [];
+	const cutoffTime = Date.now() - ageInHours * 60 * 60 * 1000;
+	const oldFiles = [];
 
-  try {
-    // Read all session directories
-    const sessions = await fs.readdir(STORAGE_DIR, { withFileTypes: true });
+	try {
+		// Read all session directories
+		const sessions = await fs.readdir(STORAGE_DIR, { withFileTypes: true });
 
-    for (const session of sessions) {
-      if (!session.isDirectory()) continue;
+		for (const session of sessions) {
+			if (!session.isDirectory()) continue;
 
-      const sessionDir = path.join(STORAGE_DIR, session.name);
-      const sessionStat = await fs.stat(sessionDir);
+			const sessionDir = path.join(STORAGE_DIR, session.name);
+			const sessionStat = await fs.stat(sessionDir);
 
-      // Check session directory age
-      if (sessionStat.mtime.getTime() < cutoffTime) {
-        // This session is old - find all files in it
-        const entries = await fs.readdir(sessionDir, { recursive: true });
-        for (const entry of entries) {
-          const entryPath = path.join(sessionDir, entry);
-          const stat = await fs.stat(entryPath);
-          if (stat.isFile() && !entry.endsWith('.meta.json')) {
-            oldFiles.push({
-              name: `${session.name}/${entry}`,
-              uploadedAt: stat.mtime.toISOString(),
-              size: stat.size
-            });
-          }
-        }
-      }
-    }
+			// Check session directory age
+			if (sessionStat.mtime.getTime() < cutoffTime) {
+				// This session is old - find all files in it
+				const entries = await fs.readdir(sessionDir, { recursive: true });
+				for (const entry of entries) {
+					const entryPath = path.join(sessionDir, entry);
+					const stat = await fs.stat(entryPath);
+					if (stat.isFile() && !entry.endsWith('.meta.json')) {
+						oldFiles.push({
+							name: `${session.name}/${entry}`,
+							uploadedAt: stat.mtime.toISOString(),
+							size: stat.size,
+						});
+					}
+				}
+			}
+		}
 
-    console.log(`📋 Found ${oldFiles.length} files older than ${ageInHours} hours`);
-    return oldFiles;
-  } catch (error) {
-    console.error('❌ List old files failed:', error.message);
-    throw error;
-  }
+		console.log(`📋 Found ${oldFiles.length} files older than ${ageInHours} hours`);
+		return oldFiles;
+	} catch (error) {
+		console.error('❌ List old files failed:', error.message);
+		throw error;
+	}
 }
 
 /**
@@ -269,48 +269,48 @@ async function listOldFiles(ageInHours = 24) {
  * @returns {Promise<Object>} - File metadata
  */
 async function getFileMetadata(sessionId, filePath) {
-  const fullPath = getFilePath(sessionId, filePath);
-  const metadataPath = `${fullPath}.meta.json`;
+	const fullPath = getFilePath(sessionId, filePath);
+	const metadataPath = `${fullPath}.meta.json`;
 
-  try {
-    const stat = await fs.stat(fullPath);
-    let customMetadata = {};
+	try {
+		const stat = await fs.stat(fullPath);
+		let customMetadata = {};
 
-    // Try to read metadata file
-    try {
-      const metaContent = await fs.readFile(metadataPath, 'utf-8');
-      customMetadata = JSON.parse(metaContent);
-    } catch (error) {
-      // Metadata file may not exist
-    }
+		// Try to read metadata file
+		try {
+			const metaContent = await fs.readFile(metadataPath, 'utf-8');
+			customMetadata = JSON.parse(metaContent);
+		} catch (error) {
+			// Metadata file may not exist
+		}
 
-    return {
-      name: filePath,
-      size: stat.size,
-      contentType: customMetadata.mimeType || 'audio/mpeg',
-      timeCreated: stat.birthtime.toISOString(),
-      updated: stat.mtime.toISOString(),
-      customMetadata
-    };
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      const err = new Error(`File not found: ${filePath}`);
-      err.status = 404;
-      throw err;
-    }
-    throw error;
-  }
+		return {
+			name: filePath,
+			size: stat.size,
+			contentType: customMetadata.mimeType || 'audio/mpeg',
+			timeCreated: stat.birthtime.toISOString(),
+			updated: stat.mtime.toISOString(),
+			customMetadata,
+		};
+	} catch (error) {
+		if (error.code === 'ENOENT') {
+			const err = new Error(`File not found: ${filePath}`);
+			err.status = 404;
+			throw err;
+		}
+		throw error;
+	}
 }
 
 module.exports = {
-  isConfigured,
-  uploadFile,
-  downloadFile,
-  downloadFileAsBuffer,
-  deleteFile,
-  deleteSession,
-  listOldFiles,
-  getFileMetadata,
-  getSessionDir,
-  getFilePath
+	isConfigured,
+	uploadFile,
+	downloadFile,
+	downloadFileAsBuffer,
+	deleteFile,
+	deleteSession,
+	listOldFiles,
+	getFileMetadata,
+	getSessionDir,
+	getFilePath,
 };
