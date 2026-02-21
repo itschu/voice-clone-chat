@@ -85,6 +85,27 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// POST /:id/transcribe - transcribe audio to text
+router.post('/:id/transcribe', turnUpload.single('audio'), async (req, res) => {
+  try {
+    // Validate req.file exists
+    if (!req.file) {
+      return res.status(400).json({ error: 'audio file is required' });
+    }
+
+    // Load conversation (will propagate 404 if not found)
+    await dataStore.getConversation(req.params.id);
+
+    // Transcribe speech
+    const text = await elevenlabs.transcribeSpeech(req.file.buffer, req.file.mimetype);
+
+    res.json({ text });
+  } catch (error) {
+    console.error(`❌ Transcription failed: ${error.message}`);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
 // POST /:id/turn - core turn pipeline
 router.post('/:id/turn', (req, res) => {
   turnUpload.single('audio')(req, res, async (err) => {
@@ -99,8 +120,8 @@ router.post('/:id/turn', (req, res) => {
           return res.status(400).json({ error: 'turnId is required' });
         }
 
-        if (!req.file) {
-          return res.status(400).json({ error: 'audio file is required' });
+        if (!req.file && (!req.body.transcribedText || !req.body.transcribedText.trim())) {
+          return res.status(400).json({ error: 'audio file or transcribedText is required' });
         }
 
         // Load conversation
@@ -128,7 +149,12 @@ router.post('/:id/turn', (req, res) => {
 
           // Transcribe speech
           console.log(`🎙️ Transcribing speech for turn ${req.body.turnId}`);
-          const userText = await elevenlabs.transcribeSpeech(req.file.buffer, req.file.mimetype);
+          let userText;
+          if (req.body.transcribedText && req.body.transcribedText.trim()) {
+            userText = req.body.transcribedText.trim();
+          } else {
+            userText = await elevenlabs.transcribeSpeech(req.file.buffer, req.file.mimetype);
+          }
 
           // Prepare messages for LLM
           const llmMessages = [
@@ -140,10 +166,11 @@ router.post('/:id/turn', (req, res) => {
           // Get LLM response
           console.log('🎙️ LLM response received');
           const aiText = await llmFactory.chat(llmMessages);
+          const safeAiText = (aiText && aiText.trim()) ? aiText.trim() : 'No response';
 
           // Generate speech
           console.log('🎙️ TTS audio generated');
-          const audioBuffer = await elevenlabs.generateSpeech(voice.elevenLabsVoiceId, aiText);
+          const audioBuffer = await elevenlabs.generateSpeech(voice.elevenLabsVoiceId, safeAiText);
 
           // Save audio file
           aiMessageId = uuidv4();
@@ -163,7 +190,7 @@ router.post('/:id/turn', (req, res) => {
             id: aiMessageId,
             turnId: req.body.turnId,
             role: 'assistant',
-            content: aiText,
+            content: safeAiText,
             audioUrl: `/api/audio/${req.params.id}/${aiMessageId}.mp3`,
             timestamp: new Date().toISOString()
           };
@@ -194,7 +221,7 @@ router.post('/:id/turn', (req, res) => {
             }
           }
 
-          res.status(500).json({ error: error.message });
+          res.status(error.status || 500).json({ error: error.message });
         }
       });
     } catch (error) {

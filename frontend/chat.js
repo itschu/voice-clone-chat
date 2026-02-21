@@ -17,6 +17,14 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// Helper function to render AI content with "No response" handling
+function renderAiContent(content) {
+  if (!content || content === 'No response') {
+    return '<span class="no-response">No response</span>';
+  }
+  return escapeHtml(content);
+}
+
 // Show a toast message
 function showToast(message, duration = 4000) {
   const toast = document.getElementById('toast');
@@ -49,9 +57,12 @@ function init() {
         </div>
       </div>
 
+      <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
       <!-- Chat Area -->
       <div class="chat-area">
         <div class="chat-toolbar">
+          <button id="menu-btn" class="menu-btn">☰</button>
           <label>Speaking as:</label>
           <select id="voice-select" disabled>
             <option value="">Select a voice...</option>
@@ -88,6 +99,25 @@ function init() {
   document.getElementById('new-chat-btn').addEventListener('click', handleNewChat);
   document.getElementById('voice-select').addEventListener('change', handleVoiceSelect);
   document.getElementById('mic-btn').addEventListener('click', handleMicClick);
+
+  // Mobile sidebar toggle
+  document.getElementById('menu-btn').addEventListener('click', () => {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (sidebar && overlay) {
+      sidebar.classList.add('open');
+      overlay.classList.add('visible');
+    }
+  });
+
+  document.getElementById('sidebar-overlay').addEventListener('click', () => {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (sidebar && overlay) {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('visible');
+    }
+  });
 }
 
 // Fetch initial data (voices and conversations)
@@ -145,7 +175,17 @@ function renderConvList() {
       convItem.classList.add('active');
     }
 
-    convItem.addEventListener('click', () => loadConversation(conv.id));
+    convItem.addEventListener('click', () => {
+      loadConversation(conv.id);
+
+      // Close sidebar on mobile
+      const sidebar = document.querySelector('.sidebar');
+      const overlay = document.getElementById('sidebar-overlay');
+      if (sidebar && overlay) {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('visible');
+      }
+    });
     convList.appendChild(convItem);
   });
 }
@@ -296,7 +336,7 @@ function renderMessages(messages) {
       bubble.innerHTML = escapeHtml(message.content);
     } else if (message.role === 'assistant') {
       bubble.innerHTML = `
-        ${escapeHtml(message.content)}
+        ${renderAiContent(message.content)}
         <audio class="bubble-audio" src="${escapeHtml(message.audioUrl)}" controls></audio>
       `;
     }
@@ -376,7 +416,7 @@ function handleRecordingStop() {
   }
 }
 
-// Submit a turn
+// Submit a turn (two-phase: transcribe then process)
 async function submitTurn(audioBlob, mimeType) {
   const turnId = crypto.randomUUID();
 
@@ -385,7 +425,7 @@ async function submitTurn(audioBlob, mimeType) {
   const pendingBubble = document.createElement('div');
   pendingBubble.className = 'bubble user pending';
   pendingBubble.id = 'pending-user';
-  pendingBubble.textContent = 'Sending…';
+  pendingBubble.textContent = 'Transcribing…';
   chatMessages.appendChild(pendingBubble);
 
   // Scroll to bottom
@@ -394,34 +434,45 @@ async function submitTurn(audioBlob, mimeType) {
   // Update status label
   document.getElementById('status-label').textContent = 'Transcribing…';
 
-  // Set timeout to update status label to "Thinking…" after 1 second
-  const thinkingTimeout = setTimeout(() => {
-    if (isTurnInProgress) {
-      document.getElementById('status-label').textContent = 'Thinking…';
-    }
-  }, 1000);
-
   try {
-    // Build FormData
-    const formData = new FormData();
-    formData.append('audio', audioBlob, 'recording.webm');
-    formData.append('turnId', turnId);
+    // Phase 1: Transcribe audio
+    const transcribeFormData = new FormData();
+    transcribeFormData.append('audio', audioBlob, 'recording.webm');
 
-    // Send request to API
-    const response = await fetch(`/api/conversations/${activeConversationId}/turn`, {
+    const transcribeResponse = await fetch(`/api/conversations/${activeConversationId}/transcribe`, {
       method: 'POST',
-      body: formData
+      body: transcribeFormData
     });
 
-    // Clear thinking timeout
-    clearTimeout(thinkingTimeout);
+    if (!transcribeResponse.ok) {
+      const errorData = await transcribeResponse.json();
+      throw new Error('Transcription failed: ' + (errorData.error || 'Unknown error'));
+    }
 
-    if (!response.ok) {
-      const errorData = await response.json();
+    const transcribeResult = await transcribeResponse.json();
+
+    // Update pending bubble text to transcribed text
+    pendingBubble.textContent = transcribeResult.text;
+
+    // Update status label to "Thinking…"
+    document.getElementById('status-label').textContent = 'Thinking…';
+
+    // Phase 2: Process turn with transcribed text
+    const turnFormData = new FormData();
+    turnFormData.append('turnId', turnId);
+    turnFormData.append('transcribedText', transcribeResult.text);
+
+    const turnResponse = await fetch(`/api/conversations/${activeConversationId}/turn`, {
+      method: 'POST',
+      body: turnFormData
+    });
+
+    if (!turnResponse.ok) {
+      const errorData = await turnResponse.json();
       throw new Error(errorData.error || 'Failed to process turn');
     }
 
-    const result = await response.json();
+    const result = await turnResponse.json();
 
     // Remove pending user bubble
     const pendingUser = document.getElementById('pending-user');
@@ -439,7 +490,7 @@ async function submitTurn(audioBlob, mimeType) {
     const aiBubble = document.createElement('div');
     aiBubble.className = 'bubble ai';
     aiBubble.innerHTML = `
-      ${escapeHtml(result.aiMessage.content)}
+      ${renderAiContent(result.aiMessage.content)}
       <audio class="bubble-audio" src="${escapeHtml(result.aiMessage.audioUrl)}" controls></audio>
     `;
     chatMessages.appendChild(aiBubble);
@@ -476,9 +527,6 @@ async function submitTurn(audioBlob, mimeType) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
   } catch (error) {
     console.error('Error submitting turn:', error);
-
-    // Clear thinking timeout
-    clearTimeout(thinkingTimeout);
 
     // Remove pending user bubble
     const pendingUser = document.getElementById('pending-user');

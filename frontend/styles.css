@@ -343,12 +343,14 @@ body {
 }
 
 .nav-link {
-  color: white;
+  color: #333;
   text-decoration: none;
   font-size: 14px;
   display: block;
   margin-bottom: 8px;
 }
+
+.sidebar .nav-link { color: white; }
 
 .nav-link:hover {
   text-decoration: underline;
@@ -602,4 +604,84 @@ button:disabled {
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   z-index: 1000;
   font-size: 14px;
+}
+
+.no-response {
+  color: #999;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .voices-page {
+    padding: 12px;
+  }
+
+  .voice-card {
+    flex-direction: column;
+  }
+
+  .voice-card-actions {
+    justify-content: flex-start;
+    margin-top: 8px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .form-actions button {
+    width: 100%;
+  }
+
+  .voice-form {
+    padding: 14px;
+  }
+
+  .page-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .sidebar {
+    position: fixed;
+    left: -260px;
+    top: 0;
+    height: 100%;
+    z-index: 200;
+    transition: left 0.3s ease;
+  }
+
+  .sidebar.open {
+    left: 0;
+  }
+
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 199;
+    display: none;
+  }
+
+  .sidebar-overlay.visible {
+    display: block;
+  }
+
+  .menu-btn {
+    display: flex;
+    position: relative;
+    background: none;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    color: #333;
+    padding: 4px 8px;
+    align-items: center;
+  }
+}
+
+@media (min-width: 769px) {
+  .menu-btn {
+    display: none;
+  }
 }

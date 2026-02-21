@@ -163,9 +163,9 @@ async function generateSpeech(voiceId, text, options = {}) {
 		throw new Error('Text is required for speech generation');
 	}
 
-	// Check text length (ElevenLabs free tier limit is 10k chars, but our MVP limits to 2500)
-	if (text.length > 2500) {
-		throw new Error('Text exceeds maximum length of 2500 characters');
+	// Check text length (ElevenLabs supports ~5000 chars per request; 4500 gives a safe margin for LLM responses that exceed the old 2500-char limit)
+	if (text.length > 4500) {
+		throw new Error('Text exceeds maximum length of 4500 characters');
 	}
 
 	const defaultOptions = {
