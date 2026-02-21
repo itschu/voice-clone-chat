@@ -21,7 +21,13 @@ function init() {
     <div class="voices-page">
       <div class="page-header">
         <h1>Voices</h1>
-        <button id="add-voice-btn" class="btn btn-primary">+ Add Voice</button>
+        <div class="page-header-actions">
+          <button id="add-voice-btn" class="btn btn-primary">+ Add Voice</button>
+        </div>
+      </div>
+      <div class="nav-links">
+        <a href="#/voices" class="nav-link active">Manage Voices</a>
+        <a href="#/chat" class="nav-link">Chat</a>
       </div>
       <div id="voice-form-container" class="voice-form hidden"></div>
       <div id="voice-list" class="voice-list"></div>

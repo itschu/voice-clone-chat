@@ -169,7 +169,7 @@ async function generateSpeech(voiceId, text, options = {}) {
 	}
 
 	const defaultOptions = {
-		model_id: 'eleven_monolingual_v1',
+		model_id: process.env.ELEVENLABS_TTS_MODEL || 'eleven_multilingual_v2',
 		voice_settings: {
 			stability: 0.5,
 			similarity_boost: 0.75,
@@ -262,6 +262,7 @@ async function transcribeSpeech(audioBuffer, mimeType) {
 			filename: 'audio.webm',
 			contentType: mimeType,
 		});
+		formData.append('model_id', process.env.ELEVENLABS_STT_MODEL || 'scribe_v1');
 
 		console.log('🎙️ Transcribing speech...');
 
