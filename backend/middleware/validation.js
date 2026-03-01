@@ -18,8 +18,8 @@ const MAX_TEXT_LENGTH = 2500;
  * @returns {boolean}
  */
 function isValidFileFormat(file) {
-  const ext = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
-  return ALLOWED_FORMATS.includes(file.mimetype) || ALLOWED_EXTENSIONS.includes(ext);
+	const ext = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
+	return ALLOWED_FORMATS.includes(file.mimetype) || ALLOWED_EXTENSIONS.includes(ext);
 }
 
 /**
@@ -28,7 +28,7 @@ function isValidFileFormat(file) {
  * @returns {boolean}
  */
 function isValidFileSize(file) {
-  return file.size <= MAX_FILE_SIZE;
+	return file.size <= MAX_FILE_SIZE;
 }
 
 /**
@@ -37,7 +37,7 @@ function isValidFileSize(file) {
  * @returns {boolean}
  */
 function isValidFileCount(files) {
-  return files && files.length >= 1 && files.length <= MAX_FILES;
+	return files && files.length >= 1 && files.length <= MAX_FILES;
 }
 
 /**
@@ -46,7 +46,7 @@ function isValidFileCount(files) {
  * @returns {boolean}
  */
 function isValidTextLength(text) {
-  return text && text.length > 0 && text.length <= MAX_TEXT_LENGTH;
+	return text && text.length > 0 && text.length <= MAX_TEXT_LENGTH;
 }
 
 /**
@@ -55,25 +55,25 @@ function isValidTextLength(text) {
  * @returns {string|null} - Error message or null if valid
  */
 function getFileValidationError(files) {
-  if (!files || files.length === 0) {
-    return 'Please upload at least 1 voice sample.';
-  }
+	if (!files || files.length === 0) {
+		return 'Please upload at least 1 voice sample.';
+	}
 
-  if (files.length > MAX_FILES) {
-    return `You can upload up to ${MAX_FILES} samples.`;
-  }
+	if (files.length > MAX_FILES) {
+		return `You can upload up to ${MAX_FILES} samples.`;
+	}
 
-  for (const file of files) {
-    if (!isValidFileSize(file)) {
-      return `File "${file.originalname}" must be under 10MB.`;
-    }
+	for (const file of files) {
+		if (!isValidFileSize(file)) {
+			return `File "${file.originalname}" must be under 10MB.`;
+		}
 
-    if (!isValidFileFormat(file)) {
-      return `File "${file.originalname}" is not a supported format. Upload MP3, WAV, or M4A.`;
-    }
-  }
+		if (!isValidFileFormat(file)) {
+			return `File "${file.originalname}" is not a supported format. Upload MP3, WAV, or M4A.`;
+		}
+	}
 
-  return null;
+	return null;
 }
 
 /**
@@ -82,77 +82,77 @@ function getFileValidationError(files) {
  * @returns {string|null} - Error message or null if valid
  */
 function getTextValidationError(text) {
-  if (!text || text.trim().length === 0) {
-    return 'Please enter text to generate speech.';
-  }
+	if (!text || text.trim().length === 0) {
+		return 'Please enter text to generate speech.';
+	}
 
-  if (text.length > MAX_TEXT_LENGTH) {
-    return `Text must be ${MAX_TEXT_LENGTH} characters or fewer.`;
-  }
+	if (text.length > MAX_TEXT_LENGTH) {
+		return `Text must be ${MAX_TEXT_LENGTH} characters or fewer.`;
+	}
 
-  return null;
+	return null;
 }
 
 /**
  * Express middleware to validate upload request
  */
 function validateUpload(req, res, next) {
-  const files = req.files;
-  const error = getFileValidationError(files);
+	const files = req.files;
+	const error = getFileValidationError(files);
 
-  if (error) {
-    return res.status(400).json({
-      error: 'Validation Error',
-      message: error
-    });
-  }
+	if (error) {
+		return res.status(400).json({
+			error: 'Validation Error',
+			message: error,
+		});
+	}
 
-  next();
+	next();
 }
 
 /**
  * Express middleware to validate generation request
  */
 function validateGeneration(req, res, next) {
-  const { sessionId, text, fileIds } = req.body;
+	const { sessionId, text, fileIds } = req.body;
 
-  if (!sessionId) {
-    return res.status(400).json({
-      error: 'Validation Error',
-      message: 'Session ID is required.'
-    });
-  }
+	if (!sessionId) {
+		return res.status(400).json({
+			error: 'Validation Error',
+			message: 'Session ID is required.',
+		});
+	}
 
-  if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
-    return res.status(400).json({
-      error: 'Validation Error',
-      message: 'At least one file ID is required.'
-    });
-  }
+	if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
+		return res.status(400).json({
+			error: 'Validation Error',
+			message: 'At least one file ID is required.',
+		});
+	}
 
-  const textError = getTextValidationError(text);
-  if (textError) {
-    return res.status(400).json({
-      error: 'Validation Error',
-      message: textError
-    });
-  }
+	const textError = getTextValidationError(text);
+	if (textError) {
+		return res.status(400).json({
+			error: 'Validation Error',
+			message: textError,
+		});
+	}
 
-  next();
+	next();
 }
 
 module.exports = {
-  ALLOWED_FORMATS,
-  ALLOWED_EXTENSIONS,
-  MAX_FILE_SIZE,
-  MAX_FILES,
-  MAX_TEXT_LENGTH,
-  isValidFileFormat,
-  isValidFileSize,
-  isValidFileCount,
-  isValidTextLength,
-  getFileValidationError,
-  getTextValidationError,
-  validateUpload,
-  validateGeneration
+	ALLOWED_FORMATS,
+	ALLOWED_EXTENSIONS,
+	MAX_FILE_SIZE,
+	MAX_FILES,
+	MAX_TEXT_LENGTH,
+	isValidFileFormat,
+	isValidFileSize,
+	isValidFileCount,
+	isValidTextLength,
+	getFileValidationError,
+	getTextValidationError,
+	validateUpload,
+	validateGeneration,
 };

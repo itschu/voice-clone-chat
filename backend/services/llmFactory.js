@@ -5,10 +5,10 @@
 
 // Provider registry mapping provider names to their relative module paths
 const PROVIDER_REGISTRY = {
-  'openai': './llm/openai',
-  'grok': './llm/grok',
-  'gemini': './llm/gemini',
-  'ollama': './llm/ollama'
+	openai: './llm/openai',
+	grok: './llm/grok',
+	gemini: './llm/gemini',
+	ollama: './llm/ollama',
 };
 
 // Read provider from environment at module load time
@@ -16,7 +16,7 @@ const providerName = process.env.LLM_PROVIDER || 'openai';
 
 // Validate provider name
 if (!PROVIDER_REGISTRY.hasOwnProperty(providerName)) {
-  throw new Error(`❌ Unknown LLM_PROVIDER '${providerName}'. Allowed values: ${Object.keys(PROVIDER_REGISTRY).join(', ')}`);
+	throw new Error(`❌ Unknown LLM_PROVIDER '${providerName}'. Allowed values: ${Object.keys(PROVIDER_REGISTRY).join(', ')}`);
 }
 
 // Lazily require only the active provider module
@@ -27,7 +27,7 @@ const provider = require(PROVIDER_REGISTRY[providerName]);
  * @returns {boolean} True if the provider is properly configured
  */
 function isConfigured() {
-  return provider.isConfigured();
+	return provider.isConfigured();
 }
 
 /**
@@ -36,12 +36,12 @@ function isConfigured() {
  * @returns {Promise<string>} The response text from the LLM
  */
 async function chat(messages) {
-  try {
-    return await provider.chat(messages);
-  } catch (error) {
-    // Re-throw as-is since providers already produce descriptive messages
-    throw error;
-  }
+	try {
+		return await provider.chat(messages);
+	} catch (error) {
+		// Re-throw as-is since providers already produce descriptive messages
+		throw error;
+	}
 }
 
 module.exports = { isConfigured, chat };
