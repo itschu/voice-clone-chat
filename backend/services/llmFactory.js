@@ -9,6 +9,7 @@ const PROVIDER_REGISTRY = {
 	grok: './llm/grok',
 	gemini: './llm/gemini',
 	ollama: './llm/ollama',
+	openrouter: './llm/openrouter',
 };
 
 // Read provider from environment at module load time

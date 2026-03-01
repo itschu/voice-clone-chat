@@ -13,7 +13,13 @@ const turnUpload = multer({ storage: multer.memoryStorage() });
 const turnQueues = new Map();
 
 // Voice switch instruction for LLM
-const VOICE_SWITCH_META = 'VOICE SWITCH: If the user requests a different speaking voice or persona, output `{"switchVoice":"<name>"}` on the very first line, then continue your reply. Otherwise respond normally with no prefix.';
+const VOICE_SWITCH_META = `If the user asks to switch to a different voice or persona, you MUST output the following JSON on its own line BEFORE your reply — no preamble, no explanation before it:
+{"switchVoice":"<exact voice name>"}
+Then continue your reply as the new persona on the next line.
+Example:
+{"switchVoice":"Didi"}
+Hello! I am Didi, great to meet you.
+If no voice switch is requested, respond normally with no JSON prefix whatsoever.`;
 
 // Helper function to extract voice switch signal from LLM response
 function extractSwitchVoiceSignal(text) {
@@ -48,6 +54,30 @@ function extractSwitchVoiceSignal(text) {
 			}
 		} catch (e) {
 			// Return null if JSON parsing fails
+		}
+	}
+
+	// Priority 3: Scan all lines for JSON pattern
+	const lines = text.split('\n');
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
+		const jsonMatch = line.match(/\{[^\n]*\}/);
+		if (jsonMatch) {
+			try {
+				const parsed = JSON.parse(jsonMatch[0]);
+				if (typeof parsed.switchVoice === 'string' && parsed.switchVoice) {
+					// Remove the line containing the JSON from the array
+					lines.splice(i, 1);
+					// Join the remaining lines back together
+					const replyText = lines.join('\n').trim();
+					return {
+						switchVoice: parsed.switchVoice,
+						replyText: replyText,
+					};
+				}
+			} catch (e) {
+				// Continue to next line if JSON parsing fails
+			}
 		}
 	}
 
@@ -282,7 +312,7 @@ router.post('/:id/turn', (req, res) => {
 						// Run partial case-insensitive match against voices array
 						// Normalize the extracted switch voice name by trimming whitespace
 						const normalizedSwitchVoice = signalResult.switchVoice.trim();
-						const matches = voices.filter((v) => v.name.toLowerCase().includes(normalizedSwitchVoice.toLowerCase()));
+						const matches = voices.filter((v) => v.name.toLowerCase().includes(normalizedSwitchVoice.toLowerCase()) || normalizedSwitchVoice.toLowerCase().includes(v.name.toLowerCase()));
 
 						if (matches.length === 0) {
 							// No matching voice found

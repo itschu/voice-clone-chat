@@ -40,6 +40,20 @@ function showToast(message, duration = 4000) {
 	}
 }
 
+// Create a system event bubble
+function createSystemEventBubble(evt) {
+	const bubble = document.createElement('div');
+	bubble.className = evt.subtype === 'recovery' ? 'system-event recovery' : 'system-event';
+
+	if (evt.subtype === 'recovery') {
+		bubble.textContent = `⚠️ Previous voice unavailable; switched to ${evt.toVoiceName}.`;
+	} else {
+		bubble.textContent = `🎙️ Voice switched to ${evt.toVoiceName}`;
+	}
+
+	return bubble;
+}
+
 // Initialize the chat page
 function init() {
 	// Set the HTML content for the chat page
@@ -77,15 +91,19 @@ function init() {
           </div>
         </div>
         <div class="chat-input-bar">
+          <div class="input-row">
+            <input type="text" id="text-input" class="text-input" placeholder="Type your message..." disabled>
+            <button id="send-btn" class="send-btn" disabled>Send</button>
+            <button id="mic-btn" class="mic-btn" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="23"></line>
+                <line x1="8" y1="23" x2="16" y2="23"></line>
+              </svg>
+            </button>
+          </div>
           <div id="status-label" class="status-label">Select a voice to begin.</div>
-          <button id="mic-btn" class="mic-btn" disabled>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-              <line x1="12" y1="19" x2="12" y2="23"></line>
-              <line x1="8" y1="23" x2="16" y2="23"></line>
-            </svg>
-          </button>
         </div>
       </div>
     </div>
@@ -101,6 +119,12 @@ function init() {
 	document.getElementById('new-chat-btn').addEventListener('click', handleNewChat);
 	document.getElementById('voice-select').addEventListener('change', handleVoiceSelect);
 	document.getElementById('mic-btn').addEventListener('click', handleMicClick);
+	document.getElementById('send-btn').addEventListener('click', handleSendText);
+	document.getElementById('text-input').addEventListener('keypress', (e) => {
+		if (e.key === 'Enter') {
+			handleSendText();
+		}
+	});
 
 	// Mobile sidebar toggle
 	document.getElementById('menu-btn').addEventListener('click', () => {
@@ -216,8 +240,10 @@ function handleNewChat() {
 	// Update status label
 	document.getElementById('status-label').textContent = 'Select a voice to begin.';
 
-	// Disable mic button
+	// Disable mic button, text input, and send button
 	document.getElementById('mic-btn').disabled = true;
+	document.getElementById('text-input').disabled = true;
+	document.getElementById('send-btn').disabled = true;
 
 	// Remove active class from all conversation items
 	document.querySelectorAll('.conv-item').forEach((item) => {
@@ -263,8 +289,10 @@ async function handleVoiceSelect() {
 		const voiceName = voice ? voice.name : 'Voice';
 		document.getElementById('status-label').textContent = `${escapeHtml(voiceName)} is ready. Press the mic to start talking.`;
 
-		// Enable mic button
+		// Enable mic button, text input, and send button
 		document.getElementById('mic-btn').disabled = false;
+		document.getElementById('text-input').disabled = false;
+		document.getElementById('send-btn').disabled = false;
 
 		// Clear chat messages
 		document.getElementById('chat-messages').innerHTML = '';
@@ -297,24 +325,36 @@ async function loadConversation(id) {
 		// Render messages
 		renderMessages(conversation.messages);
 
-		// Set voice select value and disable it
-		const voiceSelect = document.getElementById('voice-select');
-		voiceSelect.value = conversation.voiceId;
-		voiceSelect.disabled = true;
-
-		// Update status label
-		document.getElementById('status-label').textContent = 'Press mic to speak';
-
-		// Enable mic button
-		document.getElementById('mic-btn').disabled = false;
-
-		// Update active class in sidebar
+		// Update active class in sidebar FIRST (before early return)
 		document.querySelectorAll('.conv-item').forEach((item) => {
 			item.classList.remove('active');
 			if (item.dataset.id === id) {
 				item.classList.add('active');
 			}
 		});
+
+		// Set voice select value and disable it
+		const voiceSelect = document.getElementById('voice-select');
+		voiceSelect.value = conversation.voiceId;
+
+		// No-voices guard
+		if (chatVoices.length === 0) {
+			document.getElementById('mic-btn').disabled = true;
+			document.getElementById('text-input').disabled = true;
+			document.getElementById('send-btn').disabled = true;
+			document.getElementById('status-label').textContent = 'Select a voice to begin.';
+			return;
+		}
+
+		voiceSelect.disabled = true;
+
+		// Update status label
+		document.getElementById('status-label').textContent = 'Press mic to speak';
+
+		// Enable mic button, text input, and send button
+		document.getElementById('mic-btn').disabled = false;
+		document.getElementById('text-input').disabled = false;
+		document.getElementById('send-btn').disabled = false;
 	} catch (error) {
 		console.error('Error loading conversation:', error);
 		showToast(error.message || 'Failed to load conversation');
@@ -337,6 +377,16 @@ function renderMessages(messages) {
 	}
 
 	messages.forEach((message) => {
+		// Handle system messages
+		if (message.role === 'system') {
+			if (message.type === 'voiceSwitch') {
+				const systemBubble = createSystemEventBubble(message);
+				chatMessages.appendChild(systemBubble);
+			}
+			// Skip rendering for other system message types
+			return;
+		}
+
 		const bubble = document.createElement('div');
 		bubble.className = `bubble ${message.role}`;
 
@@ -354,6 +404,25 @@ function renderMessages(messages) {
 
 	// Scroll to bottom
 	chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Handle send text button click
+function handleSendText() {
+	const textInput = document.getElementById('text-input');
+	const text = textInput.value.trim();
+
+	if (text && activeConversationId) {
+		// Push text turn to queue
+		turnQueue.push({ text, conversationId: activeConversationId });
+
+		// Clear input
+		textInput.value = '';
+
+		// Process queue if not already processing
+		if (!isProcessingTurn) {
+			drainQueue();
+		}
+	}
 }
 
 // Handle mic button click
@@ -432,7 +501,7 @@ async function drainQueue() {
 		const item = turnQueue.shift();
 
 		try {
-			await submitTurn(item.audioBlob, item.mimeType, item.conversationId);
+			await submitTurn(item);
 
 			// If there are more items in the queue, update status
 			if (turnQueue.length > 0) {
@@ -456,43 +525,64 @@ async function drainQueue() {
 	}
 }
 
-// Submit a turn (two-phase: transcribe then process)
-async function submitTurn(audioBlob, mimeType, conversationId) {
+// Submit a turn (two-phase: transcribe then process for audio, direct for text)
+async function submitTurn(item) {
 	const turnId = crypto.randomUUID();
+	const conversationId = item.conversationId;
 
 	// Add pending user bubble
 	const chatMessages = document.getElementById('chat-messages');
 	const pendingBubble = document.createElement('div');
 	pendingBubble.className = 'bubble user pending';
 	pendingBubble.id = 'pending-user';
-	pendingBubble.textContent = 'Transcribing…';
+
+	if (item.text) {
+		// For text input, show the text directly
+		pendingBubble.textContent = item.text;
+	} else {
+		// For audio input, show transcribing status
+		pendingBubble.textContent = 'Transcribing…';
+	}
+
 	chatMessages.appendChild(pendingBubble);
 
 	// Scroll to bottom
 	chatMessages.scrollTop = chatMessages.scrollHeight;
 
 	// Update status label
-	document.getElementById('status-label').textContent = 'Transcribing…';
+	if (item.text) {
+		document.getElementById('status-label').textContent = 'Thinking…';
+	} else {
+		document.getElementById('status-label').textContent = 'Transcribing…';
+	}
 
 	try {
-		// Phase 1: Transcribe audio
-		const transcribeFormData = new FormData();
-		transcribeFormData.append('audio', audioBlob, 'recording.webm');
+		let userText;
 
-		const transcribeResponse = await fetch(`/api/conversations/${conversationId}/transcribe`, {
-			method: 'POST',
-			body: transcribeFormData,
-		});
+		if (item.text) {
+			// For text input, use the text directly
+			userText = item.text;
+		} else {
+			// For audio input, transcribe first
+			const transcribeFormData = new FormData();
+			transcribeFormData.append('audio', item.audioBlob, 'recording.webm');
 
-		if (!transcribeResponse.ok) {
-			const errorData = await transcribeResponse.json();
-			throw new Error('Transcription failed: ' + (errorData.error || 'Unknown error'));
+			const transcribeResponse = await fetch(`/api/conversations/${conversationId}/transcribe`, {
+				method: 'POST',
+				body: transcribeFormData,
+			});
+
+			if (!transcribeResponse.ok) {
+				const errorData = await transcribeResponse.json();
+				throw new Error('Transcription failed: ' + (errorData.error || 'Unknown error'));
+			}
+
+			const transcribeResult = await transcribeResponse.json();
+			userText = transcribeResult.text;
+
+			// Update pending bubble text to transcribed text
+			pendingBubble.textContent = userText;
 		}
-
-		const transcribeResult = await transcribeResponse.json();
-
-		// Update pending bubble text to transcribed text
-		pendingBubble.textContent = transcribeResult.text;
 
 		// Update status label to "Thinking…" with queue info if needed
 		if (turnQueue.length > 0) {
@@ -501,10 +591,10 @@ async function submitTurn(audioBlob, mimeType, conversationId) {
 			document.getElementById('status-label').textContent = 'Thinking…';
 		}
 
-		// Phase 2: Process turn with transcribed text
+		// Phase 2: Process turn with text
 		const turnFormData = new FormData();
 		turnFormData.append('turnId', turnId);
-		turnFormData.append('transcribedText', transcribeResult.text);
+		turnFormData.append('transcribedText', userText);
 
 		const turnResponse = await fetch(`/api/conversations/${conversationId}/turn`, {
 			method: 'POST',
@@ -543,6 +633,18 @@ async function submitTurn(audioBlob, mimeType, conversationId) {
 		const audio = aiBubble.querySelector('audio');
 		if (audio) {
 			audio.play().catch((e) => console.log('Auto-play prevented:', e));
+		}
+
+		// Handle voice switch event
+		if (result.voiceSwitchEvent) {
+			const systemBubble = createSystemEventBubble(result.voiceSwitchEvent);
+			chatMessages.insertBefore(systemBubble, aiBubble);
+
+			// Update voice select value
+			const voiceSelect = document.getElementById('voice-select');
+			if (voiceSelect) {
+				voiceSelect.value = result.voiceSwitchEvent.toVoiceId;
+			}
 		}
 
 		// Check if conversation title needs to be updated
