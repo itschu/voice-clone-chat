@@ -308,6 +308,9 @@ body {
 	margin-bottom: 6px;
 	transition: background 0.2s;
 	color: white;
+	position: relative;
+	display: flex;
+	align-items: center;
 }
 
 .conv-item:hover {
@@ -321,6 +324,33 @@ body {
 
 .conv-item.active .conv-voice {
 	color: rgba(255, 255, 255, 0.8);
+}
+
+.conv-item-content {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.conv-delete-btn {
+	opacity: 0;
+	background: transparent;
+	border: none;
+	color: #ccc;
+	font-size: 16px;
+	cursor: pointer;
+	padding: 4px 6px;
+	border-radius: 4px;
+	flex-shrink: 0;
+	transition: opacity 0.15s, color 0.15s;
+}
+
+.conv-item:hover .conv-delete-btn {
+	opacity: 1;
+}
+
+.conv-delete-btn:hover {
+	color: #dc3545;
 }
 
 .conv-title {
@@ -948,6 +978,21 @@ details.advanced-keys {
 
 .llm-pill:hover {
 	background: #e0e7ff;
+}
+
+.language-pill {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 12px;
+	background: #f0fdf4;
+	border: 1px solid #bbf7d0;
+	border-radius: 20px;
+	font-size: 12px;
+	color: #166534;
+	font-weight: 600;
+	white-space: nowrap;
+	user-select: none;
 }
 
 .llm-dropdown {

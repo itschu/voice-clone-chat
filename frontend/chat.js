@@ -15,6 +15,9 @@ let openrouterActive = false;
 let openRouterModels = [];
 let activeLlmModel = null;
 let preferredLlmModel = null;
+let activeLanguage = null;
+let defaultLanguage = 'en';
+let chatInitialised = false;
 
 // Utility to escape HTML
 function escapeHtml(text) {
@@ -83,6 +86,37 @@ function getModelFriendlyName(modelId) {
 	return model ? model.name : 'Default';
 }
 
+// Language names mapping for display
+const languageNames = {
+	en: 'English',
+	fr: 'French',
+	es: 'Spanish',
+	de: 'German',
+	ar: 'Arabic',
+	ja: 'Japanese',
+	zh: 'Chinese',
+	ru: 'Russian',
+	pt: 'Portuguese',
+	it: 'Italian',
+	ko: 'Korean',
+	nl: 'Dutch',
+	sv: 'Swedish',
+	da: 'Danish',
+	no: 'Norwegian',
+	fi: 'Finnish',
+	pl: 'Polish',
+	tr: 'Turkish',
+	he: 'Hebrew',
+	hi: 'Hindi',
+	th: 'Thai',
+	vi: 'Vietnamese',
+	id: 'Indonesian',
+	ms: 'Malay',
+	uk: 'Ukrainian',
+	cs: 'Czech',
+	hu: 'Hungarian',
+};
+
 // Update LLM pill display
 function updateLlmPill() {
 	const wrapper = document.getElementById('llm-pill-wrapper');
@@ -91,14 +125,26 @@ function updateLlmPill() {
 
 	if (!openrouterActive) {
 		wrapper.classList.add('hidden');
-		pill.classList.add('hidden');
 		return;
 	}
 
 	wrapper.classList.remove('hidden');
-	pill.classList.remove('hidden');
 	const effectiveModel = activeLlmModel ?? preferredLlmModel;
 	label.textContent = getModelFriendlyName(effectiveModel);
+}
+
+// Update language pill display
+function updateLanguagePill(languageCode) {
+	const wrapper = document.getElementById('language-pill-wrapper');
+	const label = document.getElementById('language-pill-label');
+
+	if (!languageCode) {
+		wrapper.classList.add('hidden');
+		return;
+	}
+
+	wrapper.classList.remove('hidden');
+	label.textContent = languageNames[languageCode] || languageCode;
 }
 
 // Toggle LLM dropdown
@@ -180,6 +226,10 @@ async function handleLlmModelSelect(modelId) {
 
 // Initialize the chat page
 function init() {
+	if (chatInitialised === true) {
+		renderConvList();
+		return;
+	}
 	// Set the HTML content for the chat page
 	const chatView = document.getElementById('view-chat');
 	chatView.innerHTML = `
@@ -209,9 +259,13 @@ function init() {
             <select id="voice-select" disabled>
               <option value="">Select a voice...</option>
             </select>
-            <div id="llm-pill-wrapper" class="toolbar-divider">
+            <div id="language-pill-wrapper" class="toolbar-divider hidden">
               <div class="toolbar-divider-line"></div>
-              <div id="llm-pill" class="llm-pill hidden">🤖 <span id="llm-pill-label">Default</span> ▾</div>
+              <div id="language-pill" class="language-pill">🌐 <span id="language-pill-label">English</span></div>
+            </div>
+            <div id="llm-pill-wrapper" class="toolbar-divider hidden">
+              <div class="toolbar-divider-line"></div>
+              <div id="llm-pill" class="llm-pill">🤖 <span id="llm-pill-label">Default</span> ▾</div>
             </div>
           </div>
           <div id="llm-dropdown" class="llm-dropdown hidden"></div>
@@ -276,6 +330,8 @@ function init() {
 			overlay.classList.remove('visible');
 		}
 	});
+
+	chatInitialised = true;
 }
 
 // Fetch initial data (voices and conversations)
@@ -307,6 +363,7 @@ async function fetchInitialData() {
 		const settingsData = await settingsResponse.json();
 		openrouterActive = settingsData.openrouterActive;
 		preferredLlmModel = settingsData.settings.preferredLlmModel;
+		defaultLanguage = settingsData.settings.defaultLanguage || 'en';
 
 		// Fetch OpenRouter models
 		const modelsResponse = await fetch('/api/settings/openrouter-models');
@@ -342,8 +399,11 @@ function renderConvList() {
 		const voiceName = voice ? voice.name : 'Unknown Voice';
 
 		convItem.innerHTML = `
-      <div class="conv-title">${escapeHtml(conv.title || 'New Conversation')}</div>
-      <div class="conv-voice">${escapeHtml(voiceName)}</div>
+      <div class="conv-item-content">
+        <div class="conv-title">${escapeHtml(conv.title || 'New Conversation')}</div>
+        <div class="conv-voice">${escapeHtml(voiceName)}</div>
+      </div>
+      <button class="conv-delete-btn" title="Delete conversation">×</button>
     `;
 
 		// Mark as active if this is the active conversation
@@ -362,8 +422,70 @@ function renderConvList() {
 				overlay.classList.remove('visible');
 			}
 		});
+
+		// Add event listener for delete button
+		const deleteBtn = convItem.querySelector('.conv-delete-btn');
+		deleteBtn.addEventListener('click', (event) => {
+			event.stopPropagation();
+			deleteConversation(conv.id);
+		});
 		convList.appendChild(convItem);
 	});
+}
+
+// Delete a conversation
+async function deleteConversation(id) {
+	try {
+		const response = await fetch(`/api/conversations/${id}`, {
+			method: 'DELETE',
+		});
+
+		if (!response.ok) {
+			throw new Error('Failed to delete conversation');
+		}
+
+		// Remove the conversation from the conversations array
+		conversations = conversations.filter(c => c.id !== id);
+
+		// Re-render the conversation list
+		renderConvList();
+
+		// If this was the active conversation, reset the UI
+		if (id === activeConversationId) {
+			activeConversationId = null;
+			activeLlmModel = null;
+			activeLanguage = null;
+			updateLanguagePill(null);
+
+			// Clear chat messages and show empty state
+			const chatMessages = document.getElementById('chat-messages');
+			chatMessages.innerHTML = `
+				<div class="chat-empty">
+					<div class="empty-icon">💬</div>
+					<p>Select a voice to begin.</p>
+				</div>
+			`;
+
+			// Disable mic button, text input, and send button
+			document.getElementById('mic-btn').disabled = true;
+			document.getElementById('text-input').disabled = true;
+			document.getElementById('send-btn').disabled = true;
+
+			// Reset voice select value and enable it
+			const voiceSelect = document.getElementById('voice-select');
+			voiceSelect.value = '';
+			voiceSelect.disabled = false;
+
+			// Update status label
+			document.getElementById('status-label').textContent = 'Select a voice to begin.';
+
+			// Update LLM pill
+			updateLlmPill();
+		}
+	} catch (error) {
+		console.error('Error deleting conversation:', error);
+		showToast('Failed to delete conversation.');
+	}
 }
 
 // Handle new chat button click
@@ -376,6 +498,10 @@ function handleNewChat() {
 	// Reset LLM model for new chat
 	activeLlmModel = null;
 	updateLlmPill();
+
+	// Reset language for new chat
+	activeLanguage = null;
+	updateLanguagePill(null);
 
 	// Clear chat messages and show empty state
 	const chatMessages = document.getElementById('chat-messages');
@@ -436,6 +562,10 @@ async function handleVoiceSelect() {
 		activeLlmModel = null;
 		updateLlmPill();
 
+		// Set initial language for new conversation
+		activeLanguage = defaultLanguage;
+		updateLanguagePill(activeLanguage);
+
 		// Add to conversations array
 		conversations.unshift(newConversation);
 
@@ -483,6 +613,10 @@ async function loadConversation(id) {
 		// Sync LLM model state
 		activeLlmModel = conversation.activeLlmModel || null;
 		updateLlmPill();
+
+		// Sync language state
+		activeLanguage = conversation.activeLanguage || defaultLanguage;
+		updateLanguagePill(activeLanguage);
 
 		// Render messages
 		renderMessages(conversation.messages);
@@ -813,6 +947,11 @@ async function submitTurn(item) {
 		if (result.languageSwitchEvent) {
 			const systemBubble = createSystemEventBubble(result.languageSwitchEvent);
 			chatMessages.insertBefore(systemBubble, aiBubble);
+			// Update active language if it was a successful switch
+			if (result.languageSwitchEvent.subtype === 'switch') {
+				activeLanguage = result.languageSwitchEvent.toLanguage;
+				updateLanguagePill(activeLanguage);
+			}
 		}
 
 		// Handle LLM switch event

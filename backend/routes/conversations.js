@@ -16,13 +16,10 @@ const turnUpload = multer({ storage: multer.memoryStorage() });
 const turnQueues = new Map();
 
 // Voice switch instruction for LLM
-const VOICE_SWITCH_META = `If the user asks to switch to a different voice or persona, you MUST output the following JSON on its own line BEFORE your reply — no preamble, no explanation before it:
+const VOICE_SWITCH_META = `If the user asks to switch to a different voice or persona (NOT a language), you MUST output the following JSON on its own line BEFORE your reply:
 {"switchVoice":"<exact voice name>"}
 Then continue your reply as the new persona on the next line.
-Example:
-{"switchVoice":"Didi"}
-Hello! I am Didi, great to meet you.
-If no voice switch is requested, respond normally with no JSON prefix whatsoever.`;
+IMPORTANT: Language requests like "speak in French" or "respond in Spanish" are NOT voice switches. Do not emit switchVoice for language change requests.`;
 
 // Helper function to extract voice switch signal from LLM response
 function extractSwitchVoiceSignal(text) {
@@ -88,7 +85,7 @@ function extractSwitchVoiceSignal(text) {
 }
 
 // LLM switch instruction for LLM
-const LLM_SWITCH_META = `If the user asks to switch LLM, emit {"switchLLM":"model-id"} on its own line BEFORE your reply. Use exact model IDs from the available list.`;
+const LLM_SWITCH_META = `If the user asks to switch to a different LLM/AI model (NOT a language or voice change), emit {"switchLLM":"model-id"} on its own line BEFORE your reply. Use exact model IDs from the available list. Do NOT emit this for language change requests.`;
 
 // Helper function to extract LLM switch signal from LLM response
 function extractSwitchLlmSignal(text) {
@@ -191,6 +188,8 @@ router.post('/', async (req, res) => {
 			id: uuidv4(),
 			voiceId,
 			title: 'New Conversation',
+			activeLanguage: null,
+			activeLlmModel: null,
 			createdAt: new Date().toISOString(),
 			updatedAt: new Date().toISOString(),
 			messages: [],
@@ -374,6 +373,35 @@ router.post('/:id/turn', (req, res) => {
 					// Language detection and instruction
 					const settings = await settingsStore.getSettings();
 					const currentActiveLanguage = conversation.activeLanguage || settings.defaultLanguage;
+					const languageNames = {
+						en: 'English',
+						fr: 'French',
+						es: 'Spanish',
+						de: 'German',
+						ar: 'Arabic',
+						ja: 'Japanese',
+						zh: 'Chinese',
+						ru: 'Russian',
+						pt: 'Portuguese',
+						it: 'Italian',
+						ko: 'Korean',
+						nl: 'Dutch',
+						sv: 'Swedish',
+						da: 'Danish',
+						no: 'Norwegian',
+						fi: 'Finnish',
+						pl: 'Polish',
+						tr: 'Turkish',
+						he: 'Hebrew',
+						hi: 'Hindi',
+						th: 'Thai',
+						vi: 'Vietnamese',
+						id: 'Indonesian',
+						ms: 'Malay',
+						uk: 'Ukrainian',
+						cs: 'Czech',
+						hu: 'Hungarian',
+					};
 					let detectedLang,
 						highConfidence,
 						languageSwitchEvent = null,
@@ -391,10 +419,36 @@ router.post('/:id/turn', (req, res) => {
 							deu: 'de',
 							ara: 'ar',
 							jpn: 'ja',
-							// Add more mappings as needed for supported languages
+							zho: 'zh',
+							rus: 'ru',
+							por: 'pt',
+							ita: 'it',
+							kor: 'ko',
+							nld: 'nl',
+							swe: 'sv',
+							dan: 'da',
+							nor: 'no',
+							fin: 'fi',
+							pol: 'pl',
+							tur: 'tr',
+							heb: 'he',
+							hin: 'hi',
+							tha: 'th',
+							vie: 'vi',
+							ind: 'id',
+							msa: 'ms',
+							ukr: 'uk',
+							ces: 'cs',
+							hun: 'hu',
 						};
-						detectedLang = francToBcp47[rawFrancCode] || rawFrancCode;
-						highConfidence = userText.length >= 15 && rawFrancCode !== 'und';
+						const mappedLang = francToBcp47[rawFrancCode];
+						if (mappedLang === undefined) {
+							detectedLang = 'und';
+							highConfidence = false;
+						} else {
+							detectedLang = mappedLang;
+							highConfidence = userText.length >= 15;
+						}
 					}
 					if (highConfidence && detectedLang !== currentActiveLanguage) {
 						conversation.activeLanguage = detectedLang;
@@ -408,8 +462,9 @@ router.post('/:id/turn', (req, res) => {
 							toLanguage: detectedLang,
 							timestamp: new Date().toISOString(),
 						};
-						const languageNames = { en: 'English', fr: 'French', es: 'Spanish', de: 'German', ar: 'Arabic', ja: 'Japanese' };
-						languageInstruction = `Respond in ${languageNames[detectedLang] || detectedLang}.`;
+						languageInstruction = 'Respond in ' + languageNames[detectedLang] + '.';
+					} else if (highConfidence && detectedLang === currentActiveLanguage) {
+						languageInstruction = 'Respond in ' + languageNames[currentActiveLanguage] + '.';
 					} else if (!highConfidence) {
 						languageSwitchEvent = {
 							id: uuidv4(),
@@ -419,6 +474,7 @@ router.post('/:id/turn', (req, res) => {
 							subtype: 'lowConfidence',
 							timestamp: new Date().toISOString(),
 						};
+						languageInstruction = 'Respond in ' + languageNames[currentActiveLanguage] + '.';
 					}
 
 					// Prepare messages for LLM

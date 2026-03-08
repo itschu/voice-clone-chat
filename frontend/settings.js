@@ -36,7 +36,7 @@ function init() {
 					<button id="language-save">Save</button>
 				</div>
 			</div>
-			<div class="settings-section">
+			<div class="settings-section" id="llm-settings-section">
 				<div class="section-header">
 					<div class="section-title">Preferred LLM</div>
 					<div id="openrouter-status" class="badge badge-inactive">OpenRouter Inactive</div>
@@ -106,8 +106,13 @@ function init() {
 
 	// Wire up event listeners
 	document.getElementById('language-save').addEventListener('click', saveLanguage);
-	document.getElementById('llm-save').addEventListener('click', saveLlm);
 	document.getElementById('keys-save').addEventListener('click', saveKeys);
+
+	// LLM save button only exists when OpenRouter is active
+	const llmSaveBtn = document.getElementById('llm-save');
+	if (llmSaveBtn) {
+		llmSaveBtn.addEventListener('click', saveLlm);
+	}
 
 	document.getElementById('elevenlabs-test').addEventListener('click', () => handleTestKey('elevenlabs', 'elevenlabs-key', 'elevenlabs-result'));
 	document.getElementById('openrouter-test').addEventListener('click', () => handleTestKey('openrouter', 'openrouter-key', 'openrouter-result'));
@@ -151,12 +156,10 @@ async function fetchSettings() {
 			restartEl.classList.add('hidden');
 		}
 
-		// Enable/disable LLM section
-		const llmSection = document.querySelector('.settings-section:nth-child(3)');
+		// Show/hide LLM section - remove from DOM if OpenRouter not active
+		const llmSection = document.getElementById('llm-settings-section');
 		if (!settingsData.openrouterActive) {
-			llmSection.classList.add('disabled-section');
-		} else {
-			llmSection.classList.remove('disabled-section');
+			llmSection.remove();
 		}
 
 		// Populate API keys (masked)
@@ -180,6 +183,9 @@ async function fetchModels() {
 		openrouterModels = await response.json();
 
 		const select = document.getElementById('llm-select');
+		// Skip if LLM section was removed (OpenRouter not active)
+		if (!select) return;
+
 		select.innerHTML = '<option value="">Select a model...</option>';
 		openrouterModels.forEach((model) => {
 			const option = document.createElement('option');
@@ -197,8 +203,11 @@ async function fetchModels() {
 
 // Populate LLM select with saved model
 function populateLlmSelect() {
+	const select = document.getElementById('llm-select');
+	// Skip if LLM section was removed (OpenRouter not active)
+	if (!select) return;
 	if (settingsData?.settings?.preferredLlmModel) {
-		document.getElementById('llm-select').value = settingsData.settings.preferredLlmModel;
+		select.value = settingsData.settings.preferredLlmModel;
 	}
 }
 

@@ -120,3 +120,29 @@ voicera/
 - Files are deleted immediately after download
 - Optional scheduled cleanup removes abandoned files after 24 hours
 - ElevenLabs free tier: 10,000 characters/month
+
+## Deploying to Railway
+
+### Prerequisites
+
+- A Railway account and project
+- `railway` CLI installed (optional, dashboard works too)
+
+### Steps
+
+1. **PostgreSQL** — In Railway dashboard, add a PostgreSQL plugin. `DATABASE_URL` is automatically injected.
+2. **Persistent Volume** — Service → Storage → Add Volume. Mount path: `/data`. Name: `voicera-data` (or any name).
+3. **Environment variables** — Set on the Railway service:
+   - `NODE_ENV=production`
+   - `STORAGE_DIR=/data/audio`
+   - `LLM_PROVIDER=<your choice>`
+   - `ELEVENLABS_API_KEY=<your key>`
+   - All other keys from `.env.example` as needed
+4. **Deploy** — Connect your GitHub repo to Railway or run `railway up`. Every `git push` to the linked branch triggers a new deploy.
+5. **Audio persistence** — The `/data` volume survives all deploys. New audio files are written there and remain accessible after every redeploy.
+
+### Startup behaviour on deploy
+
+- On each startup, the app automatically removes any DB conversation records whose audio files are missing (e.g. if switching from ephemeral to volume storage mid-use).
+- It also removes any audio directories on the volume that have no matching conversation in the DB.
+- These cleanup runs are logged and never prevent the server from starting.

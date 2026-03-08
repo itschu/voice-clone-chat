@@ -45,6 +45,8 @@ specs
 
 AGENTS.md
 
-data
+!data/openrouter-models.json
+data/audio
+data/voicera.*
 
 .claude
