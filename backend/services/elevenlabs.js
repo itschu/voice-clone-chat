@@ -245,7 +245,7 @@ async function generateSpeech(voiceId, text, options = {}) {
  * Transcribe speech to text using ElevenLabs Speech-to-Text
  * @param {Buffer} audioBuffer - Audio buffer to transcribe
  * @param {string} mimeType - MIME type of audio (e.g., 'audio/webm', 'audio/mp3')
- * @returns {Promise<string>} - Transcribed text
+ * @returns {Promise<{text: string, languageCode: string}>} - Transcribed text and language code
  */
 async function transcribeSpeech(audioBuffer, mimeType) {
 	if (!isConfigured()) {
@@ -274,9 +274,10 @@ async function transcribeSpeech(audioBuffer, mimeType) {
 		});
 
 		const text = response.data.text;
-		console.log(`✅ Transcription complete`);
+		const languageCode = response.data.language_code;
+		console.log(`✅ Transcription complete: ${languageCode}`);
 
-		return text;
+		return { text, languageCode };
 	} catch (error) {
 		console.error('❌ Transcription failed:', error.message);
 

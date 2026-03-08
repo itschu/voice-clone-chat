@@ -764,3 +764,218 @@ button:disabled {
 .bubble-audio {
 	display: none;
 }
+
+/* Settings page */
+.settings-page {
+	max-width: 800px;
+	margin: 0 auto;
+	padding: 32px 20px;
+	height: 100vh;
+	overflow-y: auto;
+}
+
+.settings-section {
+	background: #fff;
+	border: 1px solid #ddd;
+	border-radius: 8px;
+	padding: 20px;
+	margin-bottom: 20px;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.section-header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 16px;
+}
+
+.section-title {
+	font-size: 16px;
+	font-weight: 700;
+}
+
+.section-note {
+	font-size: 12px;
+	color: #888;
+	margin-bottom: 12px;
+}
+
+.badge {
+	font-size: 11px;
+	padding: 2px 8px;
+	border-radius: 10px;
+}
+
+.badge-active {
+	background: #d1fae5;
+	color: #065f46;
+}
+
+.badge-inactive {
+	background: #fee2e2;
+	color: #991b1b;
+}
+
+.badge-warning {
+	background: #fef3c7;
+	color: #92400e;
+}
+
+.key-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.key-row label {
+	flex: 0 0 150px;
+	font-weight: 600;
+	font-size: 14px;
+}
+
+.key-row input {
+	flex: 1;
+	padding: 10px;
+	border: 1px solid #ddd;
+	border-radius: 6px;
+	font-family: inherit;
+	font-size: 14px;
+}
+
+.key-row button {
+	padding: 10px 16px;
+	border: none;
+	border-radius: 6px;
+	font-weight: 600;
+	cursor: pointer;
+	font-size: 14px;
+	transition: all 0.2s;
+	background: #007bff;
+	color: #fff;
+}
+
+.key-row button:hover:not(:disabled) {
+	background: #0056b3;
+}
+
+.key-result {
+	font-size: 12px;
+	white-space: nowrap;
+}
+
+.save-bar {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 12px;
+}
+
+.disabled-section {
+	opacity: 0.5;
+	pointer-events: none;
+}
+
+.settings-page .nav-links {
+	padding: 0;
+	border: none;
+	margin-bottom: 20px;
+}
+
+.settings-page .nav-links .nav-link {
+	display: inline-block;
+	margin-right: 20px;
+	margin-bottom: 0;
+	color: #333;
+}
+
+.settings-page .nav-links .nav-link.active {
+	color: #007bff;
+}
+
+details.advanced-keys > summary {
+	cursor: pointer;
+	font-weight: 600;
+	color: #333;
+	margin-bottom: 10px;
+	font-size: 14px;
+}
+
+details.advanced-keys {
+	margin-top: 8px;
+}
+
+#view-settings {
+	overflow-y: auto;
+}
+
+/* LLM Pill and Dropdown */
+.toolbar-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.toolbar-divider {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	position: relative;
+}
+
+.toolbar-divider-line {
+	width: 1px;
+	height: 28px;
+	background: #eee;
+}
+
+.llm-pill {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 12px;
+	background: #f0f4ff;
+	border: 1px solid #c7d2fe;
+	border-radius: 20px;
+	cursor: pointer;
+	font-size: 12px;
+	color: #4338ca;
+	font-weight: 600;
+	position: relative;
+	white-space: nowrap;
+	user-select: none;
+}
+
+.llm-pill:hover {
+	background: #e0e7ff;
+}
+
+.llm-dropdown {
+	position: absolute;
+	top: calc(100% + 6px);
+	left: 0;
+	background: #fff;
+	border: 1px solid #ddd;
+	border-radius: 6px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+	padding: 6px 0;
+	z-index: 100;
+	min-width: 200px;
+}
+
+.llm-dropdown-item {
+	padding: 8px 14px;
+	cursor: pointer;
+	color: #333;
+	font-size: 13px;
+}
+
+.llm-dropdown-item:hover {
+	background: #f5f5f5;
+}
+
+.llm-dropdown-item.active {
+	background: #f0f4ff;
+	color: #4338ca;
+	font-weight: 600;
+}

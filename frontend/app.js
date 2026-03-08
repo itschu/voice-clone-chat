@@ -36,6 +36,11 @@ function route() {
 		if (typeof voicesPage !== 'undefined' && voicesPage.init) {
 			voicesPage.init();
 		}
+	} else if (hash === '#/settings') {
+		showView('view-settings');
+		if (typeof settingsPage !== 'undefined' && settingsPage.init) {
+			settingsPage.init();
+		}
 	} else {
 		// Default to voices view
 		window.location.hash = '#/voices';

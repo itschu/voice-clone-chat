@@ -16,18 +16,21 @@
 	"author": "",
 	"license": "MIT",
 	"dependencies": {
+		"@google/generative-ai": "latest",
 		"axios": "^1.13.4",
+		"better-sqlite3": "^9.6.0",
 		"cors": "^2.8.5",
 		"dotenv": "^16.3.1",
 		"elevenlabs": "^1.59.0",
 		"express": "^4.18.2",
 		"form-data": "^4.0.5",
 		"form-data-encoder": "^4.1.0",
+		"franc": "^5.0.0",
 		"multer": "^1.4.5-lts.1",
 		"node-cron": "^3.0.3",
-		"uuid": "^9.0.1",
 		"openai": "latest",
-		"@google/generative-ai": "latest"
+		"pg": "^8.11.3",
+		"uuid": "^9.0.1"
 	},
 	"devDependencies": {
 		"nodemon": "^3.0.2"

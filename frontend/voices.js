@@ -28,6 +28,7 @@ function init() {
       <div class="nav-links">
         <a href="#/voices" class="nav-link active">Manage Voices</a>
         <a href="#/chat" class="nav-link">Chat</a>
+        <a href="#/settings" class="nav-link">Settings</a>
       </div>
       <div id="voice-form-container" class="voice-form hidden"></div>
       <div id="voice-list" class="voice-list"></div>

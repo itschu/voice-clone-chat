@@ -34,26 +34,28 @@ app.get('/api/health', (req, res) => {
 app.use('/api/voices', require('./routes/voices'));
 app.use('/api/conversations', require('./routes/conversations'));
 app.use('/api/audio', require('./routes/audio'));
+app.use('/api/settings', require('./routes/settings'));
 // app.use('/api/cleanup', require('./routes/cleanup')); // Optional - will add in Batch 3
 
-// Serve frontend for all other routes (SPA support)
-app.get('*', (req, res) => {
-	res.sendFile(path.join(__dirname, '../frontend/index.html'));
-});
+// Fire-and-forget OpenRouter startup validation
+const openrouterStatus = require('./services/openrouterStatus');
+openrouterStatus.validateRuntime().catch(() => {});
 
-// Global error handler
-app.use((err, req, res, next) => {
-	console.error('Error:', err);
-	res.status(err.status || 500).json({
-		error: err.message || 'Internal Server Error',
-		...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+// Async server startup function
+async function startServer() {
+	const db = require('./services/db');
+	await db.init();
+
+	app.listen(PORT, () => {
+		console.log(`🎙️  VoiceRA Conversational AI Server running on http://localhost:${PORT}`);
+		console.log(`📁 Environment: ${process.env.NODE_ENV || 'development'}`);
 	});
-});
+}
 
-// Start server
-app.listen(PORT, () => {
-	console.log(`🎙️  VoiceRA Conversational AI Server running on http://localhost:${PORT}`);
-	console.log(`📁 Environment: ${process.env.NODE_ENV || 'development'}`);
+// Start server with error handling
+startServer().catch((err) => {
+	console.error('❌ Failed to start server:', err);
+	process.exit(1);
 });
 
 module.exports = app;

@@ -5,6 +5,9 @@ const dataStore = require('../services/dataStore');
 const elevenlabs = require('../services/elevenlabs');
 const llmFactory = require('../services/llmFactory');
 const storage = require('../services/storage');
+const franc = require('franc');
+const settingsStore = require('../services/settingsStore');
+const openrouterStatus = require('../services/openrouterStatus');
 
 const router = express.Router();
 const turnUpload = multer({ storage: multer.memoryStorage() });
@@ -72,6 +75,72 @@ function extractSwitchVoiceSignal(text) {
 					const replyText = lines.join('\n').trim();
 					return {
 						switchVoice: parsed.switchVoice,
+						replyText: replyText,
+					};
+				}
+			} catch (e) {
+				// Continue to next line if JSON parsing fails
+			}
+		}
+	}
+
+	return null;
+}
+
+// LLM switch instruction for LLM
+const LLM_SWITCH_META = `If the user asks to switch LLM, emit {"switchLLM":"model-id"} on its own line BEFORE your reply. Use exact model IDs from the available list.`;
+
+// Helper function to extract LLM switch signal from LLM response
+function extractSwitchLlmSignal(text) {
+	if (!text) return null;
+
+	// Priority 1: Fenced block at start: ```json\n{...}\n```
+	let match = text.match(/^\`\`\`(?:json)?\s*\n(\{[^\n]*\})\s*\n\`\`\`\s*\n?/);
+	if (match) {
+		try {
+			const parsed = JSON.parse(match[1]);
+			if (typeof parsed.switchLLM === 'string' && parsed.switchLLM) {
+				return {
+					switchLLM: parsed.switchLLM,
+					replyText: text.slice(match[0].length).trim(),
+				};
+			}
+		} catch (e) {
+			// Continue to next candidate if JSON parsing fails
+		}
+	}
+
+	// Priority 2: Clean first-line JSON: {"switchLLM":"model-id"}\n...
+	match = text.match(/^(\{[^\n]*\})\s*\n?/);
+	if (match) {
+		try {
+			const parsed = JSON.parse(match[1]);
+			if (typeof parsed.switchLLM === 'string' && parsed.switchLLM) {
+				return {
+					switchLLM: parsed.switchLLM,
+					replyText: text.slice(match[0].length).trim(),
+				};
+			}
+		} catch (e) {
+			// Return null if JSON parsing fails
+		}
+	}
+
+	// Priority 3: Scan all lines for JSON pattern
+	const lines = text.split('\n');
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
+		const jsonMatch = line.match(/\{[^\n]*\}/);
+		if (jsonMatch) {
+			try {
+				const parsed = JSON.parse(jsonMatch[0]);
+				if (typeof parsed.switchLLM === 'string' && parsed.switchLLM) {
+					// Remove the line containing the JSON from the array
+					lines.splice(i, 1);
+					// Join the remaining lines back together
+					const replyText = lines.join('\n').trim();
+					return {
+						switchLLM: parsed.switchLLM,
 						replyText: replyText,
 					};
 				}
@@ -218,7 +287,7 @@ router.post('/:id/transcribe', turnUpload.single('audio'), async (req, res) => {
 		await dataStore.getConversation(req.params.id);
 
 		// Transcribe speech
-		const text = await elevenlabs.transcribeSpeech(req.file.buffer, req.file.mimetype);
+		const { text } = await elevenlabs.transcribeSpeech(req.file.buffer, req.file.mimetype);
 
 		res.json({ text });
 	} catch (error) {
@@ -254,12 +323,24 @@ router.post('/:id/turn', (req, res) => {
 					const userMessage = existing.find((m) => m.role === 'user');
 					const aiMessage = existing.find((m) => m.role === 'assistant');
 
-					// Look for voiceSwitch event
+					// Look for system events
 					const voiceSwitchEvent = existing.find((m) => m.role === 'system' && m.type === 'voiceSwitch' && m.turnId === req.body.turnId);
+					const languageSwitchEvent = existing.find((m) => m.role === 'system' && m.type === 'languageSwitch' && m.turnId === req.body.turnId);
+					const llmSwitchEvent = existing.find((m) => m.role === 'system' && m.type === 'llmSwitch' && m.subtype === 'switch' && m.turnId === req.body.turnId);
+					const llmFallbackEvent = existing.find((m) => m.role === 'system' && m.type === 'llmSwitch' && m.subtype === 'fallback' && m.turnId === req.body.turnId);
 
 					const response = { userMessage, aiMessage };
 					if (voiceSwitchEvent) {
 						response.voiceSwitchEvent = voiceSwitchEvent;
+					}
+					if (languageSwitchEvent) {
+						response.languageSwitchEvent = languageSwitchEvent;
+					}
+					if (llmSwitchEvent) {
+						response.llmSwitchEvent = llmSwitchEvent;
+					}
+					if (llmFallbackEvent) {
+						response.llmFallbackEvent = llmFallbackEvent;
 					}
 
 					return res.json(response);
@@ -280,22 +361,145 @@ router.post('/:id/turn', (req, res) => {
 					// Transcribe speech
 					console.log(`🎙️ Transcribing speech for turn ${req.body.turnId}`);
 					let userText;
+					let sttLanguageCode;
 					if (req.body.transcribedText && req.body.transcribedText.trim()) {
 						userText = req.body.transcribedText.trim();
+						sttLanguageCode = null;
 					} else {
-						userText = await elevenlabs.transcribeSpeech(req.file.buffer, req.file.mimetype);
+						const { text, languageCode } = await elevenlabs.transcribeSpeech(req.file.buffer, req.file.mimetype);
+						userText = text;
+						sttLanguageCode = languageCode;
+					}
+
+					// Language detection and instruction
+					const settings = await settingsStore.getSettings();
+					const currentActiveLanguage = conversation.activeLanguage || settings.defaultLanguage;
+					let detectedLang,
+						highConfidence,
+						languageSwitchEvent = null,
+						languageInstruction = null;
+					if (sttLanguageCode !== null) {
+						detectedLang = sttLanguageCode;
+						highConfidence = true;
+					} else {
+						const rawFrancCode = franc(userText);
+						// Normalize franc ISO-639-3 codes to BCP-47 codes used by the app
+						const francToBcp47 = {
+							eng: 'en',
+							fra: 'fr',
+							spa: 'es',
+							deu: 'de',
+							ara: 'ar',
+							jpn: 'ja',
+							// Add more mappings as needed for supported languages
+						};
+						detectedLang = francToBcp47[rawFrancCode] || rawFrancCode;
+						highConfidence = userText.length >= 15 && rawFrancCode !== 'und';
+					}
+					if (highConfidence && detectedLang !== currentActiveLanguage) {
+						conversation.activeLanguage = detectedLang;
+						languageSwitchEvent = {
+							id: uuidv4(),
+							turnId: req.body.turnId,
+							role: 'system',
+							type: 'languageSwitch',
+							subtype: 'switch',
+							fromLanguage: currentActiveLanguage,
+							toLanguage: detectedLang,
+							timestamp: new Date().toISOString(),
+						};
+						const languageNames = { en: 'English', fr: 'French', es: 'Spanish', de: 'German', ar: 'Arabic', ja: 'Japanese' };
+						languageInstruction = `Respond in ${languageNames[detectedLang] || detectedLang}.`;
+					} else if (!highConfidence) {
+						languageSwitchEvent = {
+							id: uuidv4(),
+							turnId: req.body.turnId,
+							role: 'system',
+							type: 'languageSwitch',
+							subtype: 'lowConfidence',
+							timestamp: new Date().toISOString(),
+						};
 					}
 
 					// Prepare messages for LLM
-					const llmMessages = [{ role: 'system', content: voice.systemPrompt + '\n\n' + VOICE_SWITCH_META }, ...conversation.messages.filter((m) => m.role === 'user' || m.role === 'assistant').map((m) => ({ role: m.role, content: m.content })), { role: 'user', content: userText }];
+					let systemContent = voice.systemPrompt + '\n\n' + VOICE_SWITCH_META;
+					if (openrouterStatus.isActive()) {
+						systemContent += '\n\n' + LLM_SWITCH_META;
+					}
+					if (languageInstruction) {
+						systemContent += '\n\n' + languageInstruction;
+					}
+					const llmMessages = [{ role: 'system', content: systemContent }, ...conversation.messages.filter((m) => m.role === 'user' || m.role === 'assistant').map((m) => ({ role: m.role, content: m.content })), { role: 'user', content: userText }];
 
-					// Get LLM response
+					// Resolve model override
+					let modelOverride = conversation.activeLlmModel || settings.preferredLlmModel || undefined;
+
+					// Get LLM response with auto-fallback
 					console.log('🎙️ LLM response received');
-					const aiText = await llmFactory.chat(llmMessages);
+					let aiText;
+					let llmFallbackEvent = null;
+					try {
+						aiText = await llmFactory.chat(llmMessages, { modelOverride });
+					} catch (primaryError) {
+						console.warn('⚠️ Primary LLM failed, attempting fallback');
+						const fallbackOverride = settings.preferredLlmModel && settings.preferredLlmModel !== modelOverride ? settings.preferredLlmModel : undefined;
+						try {
+							aiText = await llmFactory.chat(llmMessages, { modelOverride: fallbackOverride });
+							if (fallbackOverride !== undefined) {
+								conversation.activeLlmModel = fallbackOverride;
+								llmFallbackEvent = {
+									id: uuidv4(),
+									turnId: req.body.turnId,
+									role: 'system',
+									type: 'llmSwitch',
+									subtype: 'fallback',
+									model: fallbackOverride,
+									timestamp: new Date().toISOString(),
+								};
+							} else {
+								// Baseline fallback, no model change
+								llmFallbackEvent = {
+									id: uuidv4(),
+									turnId: req.body.turnId,
+									role: 'system',
+									type: 'llmSwitch',
+									subtype: 'fallback',
+									timestamp: new Date().toISOString(),
+								};
+							}
+						} catch (fallbackError) {
+							throw primaryError; // Re-throw original error
+						}
+					}
 
 					// Trim and extract signal
 					const trimmedAiText = aiText?.trim() || 'No response';
-					const signalResult = extractSwitchVoiceSignal(trimmedAiText);
+
+					// Extract LLM switch signal if OpenRouter active
+					let llmSwitchEvent = null;
+					let textAfterLlmSignal = trimmedAiText;
+					if (openrouterStatus.isActive()) {
+						const llmSignalResult = extractSwitchLlmSignal(trimmedAiText);
+						if (llmSignalResult) {
+							const models = await settingsStore.getOpenRouterModels();
+							const model = models.find((m) => m.id === llmSignalResult.switchLLM);
+							if (model) {
+								conversation.activeLlmModel = llmSignalResult.switchLLM;
+								llmSwitchEvent = {
+									id: uuidv4(),
+									turnId: req.body.turnId,
+									role: 'system',
+									type: 'llmSwitch',
+									subtype: 'switch',
+									model: llmSignalResult.switchLLM,
+									timestamp: new Date().toISOString(),
+								};
+								textAfterLlmSignal = llmSignalResult.replyText;
+							}
+						}
+					}
+
+					const signalResult = extractSwitchVoiceSignal(textAfterLlmSignal);
 
 					// Determine branch variables
 					let replyText,
@@ -304,7 +508,7 @@ router.post('/:id/turn', (req, res) => {
 
 					if (signalResult === null) {
 						// No voice switch signal
-						replyText = trimmedAiText;
+						replyText = textAfterLlmSignal;
 						ttsElevenLabsVoiceId = voice.elevenLabsVoiceId;
 						pendingSwitch = null;
 					} else {
@@ -399,6 +603,11 @@ router.post('/:id/turn', (req, res) => {
 						conversation.messages.push(userMessage, aiMessage);
 					}
 
+					// Push additional system events
+					if (languageSwitchEvent) conversation.messages.push(languageSwitchEvent);
+					if (llmFallbackEvent) conversation.messages.push(llmFallbackEvent);
+					if (llmSwitchEvent) conversation.messages.push(llmSwitchEvent);
+
 					// Update conversation timestamp
 					conversation.updatedAt = new Date().toISOString();
 
@@ -415,6 +624,15 @@ router.post('/:id/turn', (req, res) => {
 					const response = { userMessage, aiMessage };
 					if (voiceSwitchEvent) {
 						response.voiceSwitchEvent = voiceSwitchEvent;
+					}
+					if (languageSwitchEvent) {
+						response.languageSwitchEvent = languageSwitchEvent;
+					}
+					if (llmSwitchEvent) {
+						response.llmSwitchEvent = llmSwitchEvent;
+					}
+					if (llmFallbackEvent) {
+						response.llmFallbackEvent = llmFallbackEvent;
 					}
 
 					res.json(response);
@@ -437,6 +655,36 @@ router.post('/:id/turn', (req, res) => {
 			res.status(error.status || 500).json({ error: error.message || 'Failed to process turn' });
 		}
 	});
+});
+
+// PATCH /:id - update conversation active LLM model
+router.patch('/:id', async (req, res) => {
+	try {
+		const conversation = await dataStore.getConversation(req.params.id);
+		const models = await settingsStore.getOpenRouterModels();
+		const { activeLlmModel } = req.body;
+
+		if (typeof activeLlmModel !== 'string' || !models.find((m) => m.id === activeLlmModel)) {
+			return res.status(400).json({ error: 'Invalid activeLlmModel' });
+		}
+
+		conversation.activeLlmModel = activeLlmModel;
+		conversation.messages.push({
+			id: uuidv4(),
+			turnId: null,
+			role: 'system',
+			type: 'llmSwitch',
+			subtype: 'switch',
+			model: activeLlmModel,
+			timestamp: new Date().toISOString(),
+		});
+		conversation.updatedAt = new Date().toISOString();
+		await dataStore.saveConversation(conversation);
+
+		res.status(200).json(conversation);
+	} catch (error) {
+		res.status(error.status || 500).json({ error: error.message || 'Failed to update conversation' });
+	}
 });
 
 module.exports = router;

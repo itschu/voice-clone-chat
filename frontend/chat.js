@@ -11,6 +11,10 @@ let audioChunks = [];
 let turnQueue = [];
 let isProcessingTurn = false;
 let navigationToken = 0; // For context-staleness guard
+let openrouterActive = false;
+let openRouterModels = [];
+let activeLlmModel = null;
+let preferredLlmModel = null;
 
 // Utility to escape HTML
 function escapeHtml(text) {
@@ -43,15 +47,135 @@ function showToast(message, duration = 4000) {
 // Create a system event bubble
 function createSystemEventBubble(evt) {
 	const bubble = document.createElement('div');
-	bubble.className = evt.subtype === 'recovery' ? 'system-event recovery' : 'system-event';
+	const languageNames = { en: 'English', fr: 'French', es: 'Spanish', de: 'German', ar: 'Arabic', ja: 'Japanese' };
 
-	if (evt.subtype === 'recovery') {
-		bubble.textContent = `⚠️ Previous voice unavailable; switched to ${evt.toVoiceName}.`;
-	} else {
-		bubble.textContent = `🎙️ Voice switched to ${evt.toVoiceName}`;
+	if (evt.type === 'voiceSwitch') {
+		bubble.className = evt.subtype === 'recovery' ? 'system-event recovery' : 'system-event';
+		if (evt.subtype === 'recovery') {
+			bubble.textContent = `⚠️ Previous voice unavailable; switched to ${evt.toVoiceName}.`;
+		} else {
+			bubble.textContent = `🎙️ Voice switched to ${evt.toVoiceName}`;
+		}
+	} else if (evt.type === 'languageSwitch') {
+		bubble.className = 'system-event';
+		if (evt.subtype === 'switch') {
+			bubble.textContent = `🌐 Language switched to ${languageNames[evt.toLanguage] || evt.toLanguage}`;
+		} else if (evt.subtype === 'lowConfidence') {
+			bubble.textContent = `🌐 Language unchanged (low confidence detection)`;
+		}
+	} else if (evt.type === 'llmSwitch') {
+		if (evt.subtype === 'switch') {
+			bubble.className = 'system-event';
+			bubble.textContent = `🤖 LLM switched to ${getModelFriendlyName(evt.model)}`;
+		} else if (evt.subtype === 'fallback') {
+			bubble.className = 'system-event recovery';
+			bubble.textContent = `⚠️ Model unavailable — switched to ${getModelFriendlyName(evt.model) || 'default'}`;
+		}
 	}
 
 	return bubble;
+}
+
+// Helper function to get friendly model name
+function getModelFriendlyName(modelId) {
+	if (!modelId) return 'Default';
+	const model = openRouterModels.find((m) => m.id === modelId);
+	return model ? model.name : 'Default';
+}
+
+// Update LLM pill display
+function updateLlmPill() {
+	const wrapper = document.getElementById('llm-pill-wrapper');
+	const pill = document.getElementById('llm-pill');
+	const label = document.getElementById('llm-pill-label');
+
+	if (!openrouterActive) {
+		wrapper.classList.add('hidden');
+		pill.classList.add('hidden');
+		return;
+	}
+
+	wrapper.classList.remove('hidden');
+	pill.classList.remove('hidden');
+	const effectiveModel = activeLlmModel ?? preferredLlmModel;
+	label.textContent = getModelFriendlyName(effectiveModel);
+}
+
+// Toggle LLM dropdown
+function toggleLlmDropdown() {
+	const dropdown = document.getElementById('llm-dropdown');
+	const pill = document.getElementById('llm-pill');
+
+	if (dropdown.classList.contains('hidden')) {
+		// Show dropdown
+		dropdown.innerHTML = '';
+		openRouterModels.forEach((model) => {
+			const item = document.createElement('div');
+			item.className = 'llm-dropdown-item';
+			item.dataset.modelId = model.id;
+			item.textContent = model.name;
+			if (model.id === activeLlmModel) {
+				item.classList.add('active');
+			}
+			item.addEventListener('click', () => handleLlmModelSelect(model.id));
+			dropdown.appendChild(item);
+		});
+		dropdown.classList.remove('hidden');
+
+		// Close on outside click
+		document.addEventListener('click', closeLlmDropdownOnOutsideClick, { capture: true });
+	} else {
+		// Hide dropdown
+		dropdown.classList.add('hidden');
+		document.removeEventListener('click', closeLlmDropdownOnOutsideClick, { capture: true });
+	}
+}
+
+// Close dropdown on outside click
+function closeLlmDropdownOnOutsideClick(event) {
+	const dropdown = document.getElementById('llm-dropdown');
+	const pill = document.getElementById('llm-pill');
+	const wrapper = document.getElementById('llm-pill-wrapper');
+
+	if (!pill.contains(event.target) && !dropdown.contains(event.target) && !wrapper.contains(event.target)) {
+		dropdown.classList.add('hidden');
+		document.removeEventListener('click', closeLlmDropdownOnOutsideClick, { capture: true });
+	}
+}
+
+// Handle LLM model selection
+async function handleLlmModelSelect(modelId) {
+	const dropdown = document.getElementById('llm-dropdown');
+	dropdown.classList.add('hidden');
+	document.removeEventListener('click', closeLlmDropdownOnOutsideClick, { capture: true });
+
+	try {
+		const response = await fetch(`/api/conversations/${activeConversationId}`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ activeLlmModel: modelId }),
+		});
+
+		if (!response.ok) throw new Error('Failed to switch model');
+
+		const result = await response.json();
+
+		// Update active model
+		activeLlmModel = modelId;
+		updateLlmPill();
+
+		// Extract and render the llmSwitch event from the returned conversation messages
+		const llmSwitchEvent = result.messages[result.messages.length - 1];
+		if (llmSwitchEvent && llmSwitchEvent.type === 'llmSwitch' && llmSwitchEvent.subtype === 'switch') {
+			const chatMessages = document.getElementById('chat-messages');
+			const systemBubble = createSystemEventBubble(llmSwitchEvent);
+			chatMessages.appendChild(systemBubble);
+			chatMessages.scrollTop = chatMessages.scrollHeight;
+		}
+	} catch (error) {
+		console.error('Error switching model:', error);
+		showToast('Failed to switch model.');
+	}
 }
 
 // Initialize the chat page
@@ -70,6 +194,7 @@ function init() {
         <div class="nav-links">
           <a href="#/voices" class="nav-link">Manage Voices</a>
           <a href="#/chat" class="nav-link active">Chat</a>
+          <a href="#/settings" class="nav-link">Settings</a>
         </div>
       </div>
 
@@ -79,10 +204,17 @@ function init() {
       <div class="chat-area">
         <div class="chat-toolbar">
           <button id="menu-btn" class="menu-btn">☰</button>
-          <label>Speaking as:</label>
-          <select id="voice-select" disabled>
-            <option value="">Select a voice...</option>
-          </select>
+          <div class="toolbar-row">
+            <label>Speaking as:</label>
+            <select id="voice-select" disabled>
+              <option value="">Select a voice...</option>
+            </select>
+            <div id="llm-pill-wrapper" class="toolbar-divider">
+              <div class="toolbar-divider-line"></div>
+              <div id="llm-pill" class="llm-pill hidden">🤖 <span id="llm-pill-label">Default</span> ▾</div>
+            </div>
+          </div>
+          <div id="llm-dropdown" class="llm-dropdown hidden"></div>
         </div>
         <div id="chat-messages" class="chat-messages">
           <div class="chat-empty">
@@ -169,8 +301,26 @@ async function fetchInitialData() {
 		if (!convResponse.ok) throw new Error('Failed to fetch conversations');
 		conversations = await convResponse.json();
 
+		// Fetch settings
+		const settingsResponse = await fetch('/api/settings');
+		if (!settingsResponse.ok) throw new Error('Failed to fetch settings');
+		const settingsData = await settingsResponse.json();
+		openrouterActive = settingsData.openrouterActive;
+		preferredLlmModel = settingsData.settings.preferredLlmModel;
+
+		// Fetch OpenRouter models
+		const modelsResponse = await fetch('/api/settings/openrouter-models');
+		if (!modelsResponse.ok) throw new Error('Failed to fetch models');
+		openRouterModels = await modelsResponse.json();
+
 		// Render conversation list
 		renderConvList();
+
+		// Update LLM pill
+		updateLlmPill();
+
+		// Attach LLM pill click handler
+		document.getElementById('llm-pill').addEventListener('click', toggleLlmDropdown);
 	} catch (error) {
 		console.error('Error fetching initial data:', error);
 		showToast('Failed to load data. Please refresh the page.');
@@ -222,6 +372,10 @@ function handleNewChat() {
 	navigationToken++; // Increment navigation token
 
 	activeConversationId = null;
+
+	// Reset LLM model for new chat
+	activeLlmModel = null;
+	updateLlmPill();
 
 	// Clear chat messages and show empty state
 	const chatMessages = document.getElementById('chat-messages');
@@ -278,6 +432,10 @@ async function handleVoiceSelect() {
 		// Set as active conversation
 		activeConversationId = newConversation.id;
 
+		// Reset LLM model for new conversation
+		activeLlmModel = null;
+		updateLlmPill();
+
 		// Add to conversations array
 		conversations.unshift(newConversation);
 
@@ -321,6 +479,10 @@ async function loadConversation(id) {
 
 		// Set as active conversation
 		activeConversationId = id;
+
+		// Sync LLM model state
+		activeLlmModel = conversation.activeLlmModel || null;
+		updateLlmPill();
 
 		// Render messages
 		renderMessages(conversation.messages);
@@ -379,7 +541,7 @@ function renderMessages(messages) {
 	messages.forEach((message) => {
 		// Handle system messages
 		if (message.role === 'system') {
-			if (message.type === 'voiceSwitch') {
+			if (['voiceSwitch', 'languageSwitch', 'llmSwitch'].includes(message.type)) {
 				const systemBubble = createSystemEventBubble(message);
 				chatMessages.appendChild(systemBubble);
 			}
@@ -645,6 +807,28 @@ async function submitTurn(item) {
 			if (voiceSelect) {
 				voiceSelect.value = result.voiceSwitchEvent.toVoiceId;
 			}
+		}
+
+		// Handle language switch event
+		if (result.languageSwitchEvent) {
+			const systemBubble = createSystemEventBubble(result.languageSwitchEvent);
+			chatMessages.insertBefore(systemBubble, aiBubble);
+		}
+
+		// Handle LLM switch event
+		if (result.llmSwitchEvent) {
+			const systemBubble = createSystemEventBubble(result.llmSwitchEvent);
+			chatMessages.insertBefore(systemBubble, aiBubble);
+			activeLlmModel = result.llmSwitchEvent.model;
+			updateLlmPill();
+		}
+
+		// Handle LLM fallback event
+		if (result.llmFallbackEvent) {
+			const systemBubble = createSystemEventBubble(result.llmFallbackEvent);
+			chatMessages.insertBefore(systemBubble, aiBubble);
+			activeLlmModel = result.llmFallbackEvent.model || null;
+			updateLlmPill();
 		}
 
 		// Check if conversation title needs to be updated
